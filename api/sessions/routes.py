@@ -171,3 +171,37 @@ def complete_session(session_id):
         db.session.rollback()
         logging.error(f"Complete session error: {str(e)}")
         return jsonify({'error': 'Failed to complete session'}), 500
+
+@sessions_bp.route('/<int:session_id>/telemetry', methods=['POST'])
+@jwt_required(optional=True)
+def push_telemetry(session_id):
+    try:
+        therapy_session = TherapySession.query.get(session_id)
+        data = request.get_json() or {}
+        frames = data.get('frames', [])
+        summary = data.get('summary', {})
+        
+        logging.info(f"Received telemetry batch for session {session_id}: {len(frames)} frames, cadence={summary.get('cadence')}")
+        
+        # Persist metric if frames present
+        if frames and therapy_session:
+            latest_frame = frames[-1]
+            metric = SessionMetrics(
+                session_id=session_id,
+                current_bpm=float(latest_frame.get('cadence', therapy_session.initial_bpm or 60)),
+                sync_accuracy=float(latest_frame.get('balance_index', 0.5) * 100),
+                timestamp=datetime.utcnow()
+            )
+            db.session.add(metric)
+            db.session.commit()
+            
+        return jsonify({
+            'session_id': session_id,
+            'received_frames': len(frames),
+            'status': 'stored'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Push telemetry error: {str(e)}")
+        return jsonify({'error': 'Failed to record telemetry'}), 500
+

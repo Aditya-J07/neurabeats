@@ -67,6 +67,48 @@ class MovementEventItem(BaseModel):
 class SessionEventsPush(BaseModel):
     events: List[MovementEventItem]
 
+# --- Telemetry ---
+class PoseTelemetry(BaseModel):
+    confidence: float = 0.0
+    tracking_state: str = "LOST"
+
+class MovementTelemetry(BaseModel):
+    state: str = "STATIONARY"
+    confidence: float = 0.0
+    quality: int = 85
+
+class GaitTelemetry(BaseModel):
+    cadence_spm: Optional[float] = None
+    left_steps: int = 0
+    right_steps: int = 0
+    balance: int = 100
+
+class SyncTelemetry(BaseModel):
+    target_bpm: int = 60
+    score: int = 85
+    timing_error_ms: int = 0
+
+class AudioTelemetry(BaseModel):
+    level: float = 0.0
+    activity: bool = False
+    confidence: float = 0.8
+
+class PerformanceTelemetry(BaseModel):
+    camera_fps: float = 0.0
+    pose_fps: float = 0.0
+    inference_latency_ms: float = 0.0
+    dropped_frames: int = 0
+
+class SessionTelemetryPush(BaseModel):
+    session_id: Optional[int] = None
+    timestamp: float
+    pose: PoseTelemetry = PoseTelemetry()
+    movement: MovementTelemetry = MovementTelemetry()
+    gait: GaitTelemetry = GaitTelemetry()
+    sync: SyncTelemetry = SyncTelemetry()
+    audio: AudioTelemetry = AudioTelemetry()
+    performance: PerformanceTelemetry = PerformanceTelemetry()
+
 class SessionCompleteRequest(BaseModel):
     final_bpm: float
     duration_seconds: int

@@ -18,7 +18,7 @@ export default function ClinicianDashboard({ clinicianSettings, onUpdateSettings
   // Selected patient
   const [selectedPatientId, setSelectedPatientId] = useState(1);
   const [patientData, setPatientData] = useState(null);
-  const [recentSessions, setRecentSessions] = useState([]);
+  const [_recentSessions, setRecentSessions] = useState([]);
 
   // Fetch real patient from backend
   useEffect(() => {

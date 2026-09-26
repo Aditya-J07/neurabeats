@@ -8,17 +8,16 @@ import {
 import { soundEngine } from '../services/soundEngine';
 import { NuroMotion, NuroSync, AdaptationEngine } from '../services/nuroMotion';
 import { sessionsAPI, aiAPI } from '../services/api';
+import { NuroMotionPanel } from '../features/neuromotion';
 
 export default function PatientScreen({ clinicianSettings }) {
   // Therapy mode
-  const [selectedMode, setSelectedMode] = useState('gait');
+  const [selectedMode] = useState('gait');
   
   // Playback & tempo state
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(52);
   const [soundType, setSoundType] = useState('bell');
-  const [soundMuted, setSoundMuted] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
   
   // Session tracking
   const [sessionId, setSessionId] = useState(null);
@@ -26,8 +25,9 @@ export default function PatientScreen({ clinicianSettings }) {
   const [syncAccuracy, setSyncAccuracy] = useState(91);
   const [timingErrorMs, setTimingErrorMs] = useState(24);
   const [totalSteps, setTotalSteps] = useState(0);
-  const [lastStepSide, setLastStepSide] = useState('LEFT');
+  const [_lastStepSide, setLastStepSide] = useState('LEFT');
   const [freezingCount, setFreezingCount] = useState(0);
+  const [voiceCue] = useState('Nice and steady — match your steps to the gentle pulse.');
   
   // Adaptation Alert Banner
   const [adaptationNotice, setAdaptationNotice] = useState(null);
@@ -47,11 +47,10 @@ export default function PatientScreen({ clinicianSettings }) {
   // Visual pulse state
   const [pulseActive, setPulseActive] = useState(false);
 
-  // Voice Cue state
-  const [voiceCue, setVoiceCue] = useState('Nice and steady — match your steps to the gentle pulse.');
-
   // Refs for audio, engines, and video
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const sessionIdRef = useRef(null);
   const timerRef = useRef(null);
   const durationTimerRef = useRef(null);
   const beatCountRef = useRef(0);
@@ -60,6 +59,30 @@ export default function PatientScreen({ clinicianSettings }) {
   const nuroSyncRef = useRef(null);
   const adaptationEngineRef = useRef(null);
   const syncHistoryRef = useRef([90, 92, 91]);
+
+  // Real-time Pose & Telemetry Tracking States
+  const [landmarksData, setLandmarksData] = useState(null);
+  const [trackingState, setTrackingState] = useState('LOST');
+  const [poseConfidence, setPoseConfidence] = useState(0);
+  const [cadenceSpm, setCadenceSpm] = useState('--');
+  const [balanceScore, setBalanceScore] = useState(100);
+  const [qualityScore, setQualityScore] = useState(85);
+  const [lastStepEvent, setLastStepEvent] = useState(null);
+  const [audioState, setAudioState] = useState({ level: 0, activity: false });
+  const [motionError, setMotionError] = useState(null);
+  const [framing, setFraming] = useState(null);
+  const [diagnostics, setDiagnostics] = useState({
+    modelName: 'MediaPipe Pose Landmarker Full',
+    cameraFps: 0,
+    poseFps: 0,
+    latencyMs: 0,
+    droppedFrames: 0,
+  });
+
+  // Sync sessionIdRef
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // Initialize Engines
   useEffect(() => {
@@ -73,9 +96,43 @@ export default function PatientScreen({ clinicianSettings }) {
       handleStepDetected(stepEvent);
     });
 
+    if (nuroMotionRef.current.core) {
+      nuroMotionRef.current.core.onPoseUpdate((data) => {
+        setLandmarksData(data);
+        setTrackingState(data.quality.state);
+        setPoseConfidence(data.quality.confidence);
+        if (data.quality?.framing) {
+          setFraming(data.quality.framing);
+        }
+      });
+
+
+      nuroMotionRef.current.core.onMetrics((data) => {
+        setCadenceSpm(data.cadence.displaySpm);
+        setBalanceScore(data.balance.balanceScore);
+        setQualityScore(data.quality.qualityScore);
+        setAudioState({
+          level: data.audio?.level ?? 0,
+          activity: data.audio?.activity ?? false,
+        });
+        setDiagnostics(data.diagnostics);
+      });
+
+      nuroMotionRef.current.core.onTelemetry((packet) => {
+        if (sessionIdRef.current) {
+          sessionsAPI.pushTelemetry(sessionIdRef.current, packet).catch(() => {});
+        }
+      });
+
+      nuroMotionRef.current.core.onError((err) => {
+        setMotionError(err?.message || 'Camera or model error');
+      });
+    }
+
     return () => {
       if (nuroMotionRef.current) nuroMotionRef.current.stop();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update Adaptation Engine Safety Bounds
@@ -92,6 +149,7 @@ export default function PatientScreen({ clinicianSettings }) {
   const handleStepDetected = (stepEvent) => {
     setTotalSteps(prev => prev + 1);
     setLastStepSide(stepEvent.side);
+    setLastStepEvent(stepEvent);
 
     // Evaluate sync with NuroSync
     if (nuroSyncRef.current) {
@@ -150,9 +208,12 @@ export default function PatientScreen({ clinicianSettings }) {
       const isDownbeat = beatCountRef.current % 4 === 1;
       const nowSec = performance.now() / 1000;
 
-      // Record beat in NuroSync
+      // Record beat in NuroSync and NuroMotion
       if (nuroSyncRef.current) {
         nuroSyncRef.current.recordBeat(nowSec);
+      }
+      if (nuroMotionRef.current) {
+        nuroMotionRef.current.registerBeat(nowSec);
       }
 
       // Play audio pulse
@@ -364,145 +425,51 @@ export default function PatientScreen({ clinicianSettings }) {
         </div>
       )}
 
-      {/* Hero Live Video & Skeletal Pose Card */}
-      <div style={{
-        backgroundColor: '#1E272C',
-        borderRadius: 'var(--radius-lg)',
-        padding: '18px 24px',
-        color: '#FFFFFF',
-        marginBottom: '24px',
-        boxShadow: 'var(--shadow-md)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Camera size={20} color="#5B9A8B" />
-            <span style={{ fontSize: '15px', fontWeight: 700 }}>
-              Live Movement Tracking (NuroMotion)
-            </span>
-            {sensingSource === 'demo' ? (
-              <span style={{
-                backgroundColor: 'rgba(232, 150, 122, 0.25)',
-                color: '#F0B298',
-                border: '1px solid #E8967A',
-                fontSize: '11px',
-                fontWeight: 800,
-                padding: '2px 8px',
-                borderRadius: '4px'
-              }}>
-                DEMO MODE (SYNTHESIZED LANDMARK STREAM)
-              </span>
-            ) : (
-              <span style={{
-                backgroundColor: 'rgba(46, 204, 113, 0.25)',
-                color: '#2ECC71',
-                border: '1px solid #2ECC71',
-                fontSize: '11px',
-                fontWeight: 800,
-                padding: '2px 8px',
-                borderRadius: '4px'
-              }}>
-                LIVE CAMERA FEED ACTIVE
-              </span>
-            )}
-          </div>
+      {/* Real-Time NuroMotion Tracking Panel (MediaPipe Pose Landmarker Full) */}
+      <NuroMotionPanel
+        videoRef={videoRef}
+        canvasRef={canvasRef}
+        landmarksData={landmarksData}
+        isRunning={isPlaying}
+        isPaused={!isPlaying && duration > 0}
+        isDemoMode={sensingSource === 'demo'}
+        trackingState={trackingState}
+        confidence={poseConfidence}
+        framing={framing}
+        metrics={{
 
-          {/* Toggle between Live Camera and Demo Mode */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => toggleSensingSource('demo')}
-              style={{
-                backgroundColor: sensingSource === 'demo' ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                color: '#FFFFFF',
-                padding: '5px 12px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '12px',
-                fontWeight: 700
-              }}
-            >
-              Demo Stream
-            </button>
-            <button
-              onClick={() => toggleSensingSource('camera')}
-              style={{
-                backgroundColor: sensingSource === 'camera' ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                color: '#FFFFFF',
-                padding: '5px 12px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '12px',
-                fontWeight: 700
-              }}
-            >
-              Webcam
-            </button>
-          </div>
-        </div>
-
-        {/* Video Canvas & Live Foot Movement Visualizer */}
-        <div style={{
-          position: 'relative',
-          height: '180px',
-          backgroundColor: '#11171A',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden'
-        }}>
-          {sensingSource === 'camera' ? (
-            <video 
-              ref={videoRef} 
-              playsInline 
-              muted 
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-            />
-          ) : (
-            /* Animated Skeletal Pose Art */
-            <div style={{ textAlign: 'center', zIndex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
-                <div style={{
-                  padding: '10px 18px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: lastStepSide === 'LEFT' ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
-                  color: '#FFFFFF',
-                  fontWeight: 800,
-                  fontSize: '15px',
-                  transform: lastStepSide === 'LEFT' ? 'scale(1.08)' : 'scale(1)',
-                  transition: 'all 0.15s ease'
-                }}>
-                  LEFT STEP
-                </div>
-                <div style={{
-                  padding: '10px 18px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: lastStepSide === 'RIGHT' ? 'var(--coral-accent)' : 'rgba(255,255,255,0.08)',
-                  color: '#FFFFFF',
-                  fontWeight: 800,
-                  fontSize: '15px',
-                  transform: lastStepSide === 'RIGHT' ? 'scale(1.08)' : 'scale(1)',
-                  transition: 'all 0.15s ease'
-                }}>
-                  RIGHT STEP
-                </div>
-              </div>
-              <span style={{ fontSize: '13px', color: '#A3E4D7' }}>
-                Total Steps Logged: <strong>{totalSteps}</strong> • Timing Error: <strong>{timingErrorMs}ms</strong>
-              </span>
-            </div>
-          )}
-
-          {/* Skeleton Overlay Lines */}
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.3 }} viewBox="0 0 500 180">
-            <line x1="250" y1="30" x2="250" y2="90" stroke="#5B9A8B" strokeWidth="4" />
-            <circle cx="250" cy="30" r="14" fill="#5B9A8B" />
-            <line x1="250" y1="90" x2={lastStepSide === 'LEFT' ? '210' : '220'} y2="160" stroke="#5B9A8B" strokeWidth="4" />
-            <line x1="250" y1="90" x2={lastStepSide === 'RIGHT' ? '290' : '280'} y2="160" stroke="#5B9A8B" strokeWidth="4" />
-            <circle cx="215" cy="160" r="7" fill={lastStepSide === 'LEFT' ? '#2ECC71' : '#E8967A'} />
-            <circle cx="285" cy="160" r="7" fill={lastStepSide === 'RIGHT' ? '#2ECC71' : '#E8967A'} />
-          </svg>
-        </div>
-      </div>
+          cadenceSpm,
+          leftSteps: Math.round(totalSteps / 2),
+          rightSteps: Math.floor(totalSteps / 2),
+          totalSteps,
+          balanceScore,
+          qualityScore,
+          timingErrorMs,
+        }}
+        audioState={audioState}
+        diagnostics={diagnostics}
+        lastStep={lastStepEvent}
+        errorMessage={motionError}
+        onStartCamera={() => {
+          toggleSensingSource('camera');
+          if (!isPlaying) handleStartSession();
+        }}
+        onStartDemo={() => {
+          toggleSensingSource('demo');
+          if (!isPlaying) handleStartSession();
+        }}
+        onPause={handlePauseSession}
+        onResume={handleStartSession}
+        onStop={handleCompleteSession}
+        onReset={() => {
+          setTotalSteps(0);
+          setDuration(0);
+          if (nuroMotionRef.current && nuroMotionRef.current.core) {
+            nuroMotionRef.current.core.reset();
+          }
+        }}
+        targetBpm={bpm}
+      />
 
       {/* MAIN RHYTHM HERO CARD */}
       <div style={{

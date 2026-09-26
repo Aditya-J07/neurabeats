@@ -38,6 +38,7 @@ export const patientsAPI = {
 export const sessionsAPI = {
   createSession: (sessionData) => api.post('/sessions', sessionData),
   pushEvents: (sessionId, events) => api.post(`/sessions/${sessionId}/events`, { events }),
+  pushTelemetry: (sessionId, telemetryData) => api.post(`/sessions/${sessionId}/telemetry`, telemetryData),
   completeSession: (sessionId, completionData) => api.post(`/sessions/${sessionId}/complete`, completionData),
   getSession: (sessionId) => api.get(`/sessions/${sessionId}`),
 };

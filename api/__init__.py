@@ -19,8 +19,10 @@ def create_app():
     if not session_secret:
         raise ValueError("SESSION_SECRET environment variable is required")
     
-    app.config["SECRET_KEY"] = session_secret  # ✅ FIXED: Was hardcoded!
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///instance/neurobeat.db")
+    instance_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "instance"))
+    os.makedirs(instance_dir, exist_ok=True)
+    db_path = os.path.join(instance_dir, "neurobeat.db").replace("\\", "/")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "pool_recycle": 300,
         "pool_pre_ping": True,

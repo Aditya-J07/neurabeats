@@ -4,124 +4,63 @@
  * and adaptive tempo control as defined in ARCHITECTURE.md and PRD.md.
  */
 
+import { NuroMotion as CoreNuroMotion } from '../features/neuromotion/core/NuroMotion';
+
 export class NuroMotion {
   constructor(onStepEvent) {
     this.onStepEvent = onStepEvent;
+    this.core = new CoreNuroMotion();
     this.isTracking = false;
     this.isDemoMode = false;
     this.videoElement = null;
-    this.animFrameId = null;
 
-    // Movement history for velocity peak detection
-    this.prevY = null;
-    this.prevTime = null;
-    this.velocityHistory = [];
-    this.lastStepTime = 0;
-    this.currentSide = 'LEFT';
-    this.stepCount = 0;
-
-    // Demo mode timer
-    this.demoTimer = null;
+    this.core.onMovementEvent((ev) => {
+      if (this.onStepEvent) {
+        this.onStepEvent(ev);
+      }
+    });
   }
 
-  startCamera(videoElement) {
+  async startCamera(videoElement, targetBpm = 54) {
     this.videoElement = videoElement;
     this.isTracking = true;
     this.isDemoMode = false;
-    this.stepCount = 0;
 
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } })
-        .then(stream => {
-          if (this.videoElement) {
-            this.videoElement.srcObject = stream;
-            this.videoElement.play();
-            this.processFrames();
-          }
-        })
-        .catch(err => {
-          console.warn("Camera access denied or unavailable. Falling back to Demo Mode:", err);
-          this.startDemoMode();
-        });
-    } else {
-      this.startDemoMode();
+    const ok = await this.core.start({
+      videoElement,
+      targetBpm,
+      useMic: true,
+    });
+
+    if (!ok) {
+      this.startDemoMode(targetBpm);
     }
-  }
-
-  processFrames() {
-    if (!this.isTracking || this.isDemoMode) return;
-
-    // Lightweight motion energy / vertical displacement tracking
-    const now = performance.now() / 1000;
-    
-    // Simulate optical flow vertical peak detection from camera feed
-    if (this.prevTime) {
-      const dt = now - this.prevTime;
-      // Step interval between 0.8s and 1.3s
-      if (now - this.lastStepTime > 0.95) {
-        this.emitStep(now);
-      }
-    }
-    this.prevTime = now;
-
-    this.animFrameId = requestAnimationFrame(() => this.processFrames());
   }
 
   startDemoMode(targetBpm = 54) {
     this.isTracking = true;
     this.isDemoMode = true;
-    this.stepCount = 0;
-
-    if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
-    if (this.demoTimer) clearInterval(this.demoTimer);
-
-    // Calculate natural step interval based on current BPM with slight human variance (±25ms)
-    const scheduleNextDemoStep = () => {
-      if (!this.isTracking || !this.isDemoMode) return;
-      const baseIntervalMs = (60 / targetBpm) * 1000;
-      const variance = (Math.random() - 0.5) * 50; // ±25ms natural gait variance
-      const interval = Math.max(400, baseIntervalMs + variance);
-
-      this.demoTimer = setTimeout(() => {
-        const now = performance.now() / 1000;
-        this.emitStep(now);
-        scheduleNextDemoStep();
-      }, interval);
-    };
-
-    scheduleNextDemoStep();
-  }
-
-  emitStep(timestamp) {
-    this.stepCount += 1;
-    this.currentSide = this.currentSide === 'LEFT' ? 'RIGHT' : 'LEFT';
-    this.lastStepTime = timestamp;
-
-    const event = {
-      timestamp: Number(timestamp.toFixed(3)),
-      type: "STEP",
-      side: this.currentSide,
-      confidence: this.isDemoMode ? 0.98 : 0.92,
-      isDemo: this.isDemoMode,
-      stepNumber: this.stepCount
-    };
-
-    if (this.onStepEvent) {
-      this.onStepEvent(event);
-    }
+    this.core.startDemo(targetBpm);
   }
 
   stop() {
     this.isTracking = false;
-    if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
-    if (this.demoTimer) clearTimeout(this.demoTimer);
-    if (this.videoElement && this.videoElement.srcObject) {
-      const tracks = this.videoElement.srcObject.getTracks();
-      tracks.forEach(track => track.stop());
-      this.videoElement.srcObject = null;
-    }
+    this.core.stop();
+  }
+
+  pause() {
+    this.core.pause();
+  }
+
+  resume() {
+    this.core.resume();
+  }
+
+  registerBeat(timestamp) {
+    this.core.registerBeat(timestamp);
   }
 }
+
 
 export class NuroSync {
   constructor(toleranceMs = 250) {

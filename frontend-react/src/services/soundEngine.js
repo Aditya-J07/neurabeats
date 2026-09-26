@@ -8,8 +8,12 @@ class SoundEngine {
     this.ctx = null;
     this.currentInstrument = 'bell'; // 'bell', 'piano', 'drum', 'wood', 'metronome'
     this.isMuted = false;
-    this.voiceEnabled = true;
+    this.voiceEnabled = false; // Voice prompts disabled per user instruction
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    }
   }
+
 
   initContext() {
     if (!this.ctx) {
@@ -175,24 +179,20 @@ class SoundEngine {
         const stopTime = this.ctx.currentTime;
         gain.gain.linearRampToValueAtTime(0.0001, stopTime + 1.0);
         setTimeout(() => {
-          try { osc.stop(); } catch(e) {}
+          try { osc.stop(); } catch { /* ignore */ }
         }, 1100);
       }
     };
   }
 
-  // Warm voice cue speaking gently to patient
-  speakCue(phrase) {
-    if (!this.voiceEnabled) return;
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Don't stack speech
-      const utterance = new SpeechSynthesisUtterance(phrase);
-      utterance.rate = 0.9; // Soft, measured pace
-      utterance.pitch = 1.0;
-      utterance.volume = 0.8;
-      window.speechSynthesis.speak(utterance);
+  // Spoken voice prompts removed per user instruction
+  speakCue() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
     }
   }
 }
+
+
 
 export const soundEngine = new SoundEngine();

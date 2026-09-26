@@ -3,7 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import TherapySession, MovementEvent, AdaptationEvent, PatientProfile
-from backend.schemas import SessionCreateRequest, SessionEventsPush, SessionCompleteRequest, TherapySessionSchema
+from backend.schemas import (
+    SessionCreateRequest, SessionEventsPush, SessionTelemetryPush,
+    SessionCompleteRequest, TherapySessionSchema
+)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -53,6 +56,25 @@ def push_session_events(session_id: int, push_data: SessionEventsPush, db: Sessi
     db.commit()
 
     return {"success": True, "events_recorded": len(push_data.events), "total_steps": session.total_steps}
+
+@router.post("/{session_id}/telemetry")
+def push_session_telemetry(session_id: int, telemetry: SessionTelemetryPush, db: Session = Depends(get_db)):
+    session = db.query(TherapySession).filter(TherapySession.id == session_id).first()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": True, "code": "SESSION_NOT_FOUND", "message": f"Session with ID {session_id} not found"}
+        )
+
+    # Incrementally update session aggregate telemetry
+    new_total = (telemetry.gait.left_steps or 0) + (telemetry.gait.right_steps or 0)
+    if new_total > session.total_steps:
+        session.total_steps = new_total
+    if telemetry.sync.score > 0:
+        session.avg_sync_score = round((session.avg_sync_score * 0.85) + (telemetry.sync.score * 0.15), 1)
+
+    db.commit()
+    return {"success": True, "session_id": session_id, "timestamp": telemetry.timestamp}
 
 @router.post("/{session_id}/complete", response_model=TherapySessionSchema)
 def complete_session(session_id: int, req: SessionCompleteRequest, db: Session = Depends(get_db)):
