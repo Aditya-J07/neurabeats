@@ -60,6 +60,7 @@ class ClinicianProfile(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    profession = db.Column(db.String(100))
     license_number = db.Column(db.String(50))
     specialization = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -114,6 +115,18 @@ class TherapySession(db.Model):
     @property
     def is_demo_mode(self):
         return bool(self.get_metrics().get('is_demo'))
+
+    @property
+    def left_steps(self):
+        return self.get_metrics().get('left_steps', 0)
+
+    @property
+    def right_steps(self):
+        return self.get_metrics().get('right_steps', 0)
+
+    @property
+    def gait_symmetry(self):
+        return self.get_metrics().get('gait_symmetry', 0)
 
 class SessionMetrics(db.Model):
     __tablename__ = 'session_metrics'

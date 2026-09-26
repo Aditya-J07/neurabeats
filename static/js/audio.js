@@ -18,6 +18,8 @@ class NeuroAudioEngine {
         this.sessionType = 'gait_trainer';
         this.soundType = 'metronome';
         this.isStarted = false; // Added to track if audio has started
+        this.recentBeats = [];
+        this.lastBeatTime = performance.now();
         
         // Voice detection properties
         this.microphone = null;
@@ -209,9 +211,15 @@ class NeuroAudioEngine {
                     break;
             }
 
+            // Record beat timestamp for kinematic synchronization
+            const beatNow = performance.now();
+            this.lastBeatTime = beatNow;
+            this.recentBeats.push(beatNow);
+            if (this.recentBeats.length > 60) this.recentBeats.shift();
+
             // Record beat timestamp in NuroSync
             if (window.nuroSync && typeof window.nuroSync.recordBeat === 'function') {
-                window.nuroSync.recordBeat(performance.now() / 1000);
+                window.nuroSync.recordBeat(beatNow / 1000);
             }
 
             // Trigger beat visual callback if set
@@ -221,6 +229,23 @@ class NeuroAudioEngine {
                 }, time);
             }
         }, "4n"); // Quarter note intervals
+    }
+
+    getNearestBeatTimestamp(timestampMs) {
+        const t = timestampMs || performance.now();
+        if (!this.recentBeats || this.recentBeats.length === 0) {
+            return this.lastBeatTime || t;
+        }
+        let nearest = this.recentBeats[0];
+        let minDiff = Math.abs(t - nearest);
+        for (let i = 1; i < this.recentBeats.length; i++) {
+            const diff = Math.abs(t - this.recentBeats[i]);
+            if (diff < minDiff) {
+                minDiff = diff;
+                nearest = this.recentBeats[i];
+            }
+        }
+        return nearest;
     }
 
     setBPM(bpm) {
@@ -534,3 +559,10 @@ function cleanupAudio() {
 
 // Clean up when leaving page
 window.addEventListener('beforeunload', cleanupAudio);
+
+window.getNearestBeatTimestamp = function(timestampMs) {
+    if (audioEngine && typeof audioEngine.getNearestBeatTimestamp === 'function') {
+        return audioEngine.getNearestBeatTimestamp(timestampMs);
+    }
+    return timestampMs || performance.now();
+};
