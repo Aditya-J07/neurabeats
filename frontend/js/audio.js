@@ -169,6 +169,11 @@ class NeuroAudioEngine {
 
     setupLoop() {
         Tone.Transport.scheduleRepeat((time) => {
+            // Guard: Absolutely do not play audio if engine is not playing or session is not running!
+            if (!this.isPlaying || !this.isStarted || (typeof sessionData !== 'undefined' && !sessionData.isRunning)) {
+                return;
+            }
+
             switch (this.soundType) {
                 case 'drum':
                     this.drumSynth.triggerAttackRelease("C2", "16n", time);
@@ -215,12 +220,25 @@ class NeuroAudioEngine {
     }
 
     stop() {
-        if (this.isPlaying) {
-            Tone.Transport.stop();
-            this.isPlaying = false;
-            this.isStarted = false;
-            console.log('Audio engine stopped');
+        this.isPlaying = false;
+        this.isStarted = false;
+        try {
+            if (typeof Tone !== 'undefined' && Tone.Transport) {
+                Tone.Transport.stop();
+                Tone.Transport.position = 0;
+            }
+        } catch (e) {
+            console.warn('[AUDIO] Error stopping Tone.Transport:', e);
         }
+        try {
+            if (this.synth && typeof this.synth.triggerRelease === 'function') this.synth.triggerRelease();
+            if (this.drumSynth && typeof this.drumSynth.triggerRelease === 'function') this.drumSynth.triggerRelease();
+            if (this.bellSynth && typeof this.bellSynth.triggerRelease === 'function') this.bellSynth.triggerRelease();
+            if (this.pianoSynth && typeof this.pianoSynth.triggerRelease === 'function') this.pianoSynth.triggerRelease();
+        } catch (e) {
+            console.warn('[AUDIO] Error releasing synths:', e);
+        }
+        console.log('Audio engine stopped');
     }
 
     pause() {
@@ -353,6 +371,19 @@ function startAudioEngine(bpm = 60) {
 function stopAudioEngine() {
     if (audioEngine) {
         audioEngine.stop();
+    }
+    try {
+        if (typeof Tone !== 'undefined' && Tone.Transport) {
+            Tone.Transport.stop();
+            Tone.Transport.position = 0;
+        }
+    } catch (e) {}
+    if (typeof window !== 'undefined' && window.activeAiAudioTrack) {
+        try {
+            window.activeAiAudioTrack.pause();
+            window.activeAiAudioTrack.currentTime = 0;
+        } catch (e) {}
+        window.activeAiAudioTrack = null;
     }
 }
 

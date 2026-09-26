@@ -795,6 +795,8 @@ let sessionData = {
     currentBPM: {{ therapy_session.initial_bpm }},
     sessionType: modeConfig.key,
     isRunning: false,
+    isCompleted: false,
+    lifecycleState: 'IDLE',
     startTime: null,
     duration: 0,
     accuracyScore: 0,
@@ -831,6 +833,10 @@ if (window.nuroAgent) {
 let pausedAt = null;
 let totalPausedTime = 0; // Cumulative paused time in milliseconds
 let isUserIdle = false;  // Presentation state for zero movement
+let sessionTimer = null;
+let updateInterval = null;
+let voiceUpdateInterval = null;
+let isCompletingSession = false;
 
 // ==================================================
 // Finger Tapping Tactile State
@@ -1497,6 +1503,7 @@ function initializeChart() {
 }
 
 function getActiveDurationSeconds() {
+    if (sessionData.isCompleted && sessionData.duration > 0) return sessionData.duration;
     if (!sessionData.startTime) return 0;
     const now = Date.now();
     const startMs = (sessionData.startTime instanceof Date) ? sessionData.startTime.getTime() : Number(sessionData.startTime);
@@ -1509,6 +1516,7 @@ function getActiveDurationSeconds() {
 }
 
 function startSession() {
+    if (sessionData.isCompleted || isCompletingSession) return;
     if (pausedAt !== null) {
         resumeSession();
         return;
@@ -1517,6 +1525,8 @@ function startSession() {
     pausedAt = null;
     totalPausedTime = 0;
     sessionData.isRunning = true;
+    sessionData.isCompleted = false;
+    sessionData.lifecycleState = 'ACTIVE';
     sessionData.startTime = new Date();
     
     if (window.nuroSync && typeof window.nuroSync.setBpm === 'function') {
@@ -1529,9 +1539,20 @@ function startSession() {
         renderIdleAccuracyDisplay();
     }
     
-    document.getElementById('startBtn').style.display = 'none';
-    document.getElementById('pauseBtn').style.display = 'inline-block';
-    document.getElementById('stopBtn').style.display = 'inline-block';
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    if (startBtn) startBtn.style.display = 'none';
+    if (pauseBtn) {
+        pauseBtn.style.display = 'inline-block';
+        pauseBtn.disabled = false;
+    }
+    if (stopBtn) {
+        stopBtn.style.display = 'inline-block';
+        stopBtn.disabled = false;
+        stopBtn.innerHTML = '<i data-feather="square" class="me-2"></i>Complete Session';
+    }
+    if (typeof feather !== 'undefined') feather.replace();
     
     if (typeof startAudioEngine === 'function') {
         startAudioEngine(sessionData.currentBPM);
@@ -1542,9 +1563,14 @@ function startSession() {
     }
     
     updateTimer();
+    if (sessionTimer) clearInterval(sessionTimer);
     sessionTimer = setInterval(updateTimer, 1000);
+    
+    if (updateInterval) clearInterval(updateInterval);
     updateInterval = setInterval(updateSession, 5000);
+    
     if (modeConfig.microphone_required) {
+        if (voiceUpdateInterval) clearInterval(voiceUpdateInterval);
         voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
     }
     
@@ -1552,13 +1578,18 @@ function startSession() {
 }
 
 function pauseSession() {
-    if (!sessionData.isRunning) return; // Only transition if currently active!
+    if (!sessionData.isRunning || sessionData.isCompleted || isCompletingSession) return;
     sessionData.isRunning = false;
+    sessionData.lifecycleState = 'PAUSED';
     pausedAt = Date.now();
     
-    document.getElementById('startBtn').style.display = 'inline-block';
-    document.getElementById('pauseBtn').style.display = 'none';
-    document.getElementById('startBtn').innerHTML = '<i data-feather="play" class="me-2"></i>Resume';
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    if (startBtn) {
+        startBtn.style.display = 'inline-block';
+        startBtn.innerHTML = '<i data-feather="play" class="me-2"></i>Resume';
+    }
+    if (pauseBtn) pauseBtn.style.display = 'none';
     
     if (typeof stopAudioEngine === 'function') {
         stopAudioEngine();
@@ -1566,10 +1597,17 @@ function pauseSession() {
     
     pauseCameraProcessing();
     
-    clearInterval(sessionTimer);
-    clearInterval(updateInterval);
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+    }
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
     if (voiceUpdateInterval) {
         clearInterval(voiceUpdateInterval);
+        voiceUpdateInterval = null;
     }
     
     updateTimer();
@@ -1578,7 +1616,7 @@ function pauseSession() {
 }
 
 function resumeSession() {
-    if (sessionData.isRunning) return;
+    if (sessionData.isRunning || sessionData.isCompleted || isCompletingSession) return;
     
     if (pausedAt !== null) {
         const pauseDuration = Date.now() - pausedAt;
@@ -1588,10 +1626,20 @@ function resumeSession() {
     }
     
     sessionData.isRunning = true;
+    sessionData.lifecycleState = 'ACTIVE';
     
-    document.getElementById('startBtn').style.display = 'none';
-    document.getElementById('pauseBtn').style.display = 'inline-block';
-    document.getElementById('stopBtn').style.display = 'inline-block';
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    if (startBtn) startBtn.style.display = 'none';
+    if (pauseBtn) {
+        pauseBtn.style.display = 'inline-block';
+        pauseBtn.disabled = false;
+    }
+    if (stopBtn) {
+        stopBtn.style.display = 'inline-block';
+        stopBtn.disabled = false;
+    }
     
     if (typeof startAudioEngine === 'function') {
         startAudioEngine(sessionData.currentBPM);
@@ -1602,9 +1650,14 @@ function resumeSession() {
     }
     
     updateTimer();
+    if (sessionTimer) clearInterval(sessionTimer);
     sessionTimer = setInterval(updateTimer, 1000);
+    
+    if (updateInterval) clearInterval(updateInterval);
     updateInterval = setInterval(updateSession, 5000);
+    
     if (modeConfig.microphone_required) {
+        if (voiceUpdateInterval) clearInterval(voiceUpdateInterval);
         voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
     }
     
@@ -1612,123 +1665,199 @@ function resumeSession() {
     console.log('[SESSION] Session resumed');
 }
 
-function stopSession() {
-    sessionData.isRunning = false;
-    
-    if (typeof stopAudioEngine === 'function') {
-        stopAudioEngine();
+async function stopSession() {
+    // 0. Double-click & multiple completion protection
+    if (isCompletingSession || sessionData.isCompleted) {
+        console.warn('[SESSION] Completion already in progress or session already completed.');
+        return;
     }
-    clearInterval(sessionTimer);
-    clearInterval(updateInterval);
+    isCompletingSession = true;
+    sessionData.isRunning = false;
+    sessionData.lifecycleState = 'COMPLETING';
+    
+    console.log('[SESSION] Transitioning to COMPLETING. Freezing resources...');
+
+    // 1. Immediately update UI to show completing state and disable further triggers
+    const stopBtn = document.getElementById('stopBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const startBtn = document.getElementById('startBtn');
+    if (stopBtn) {
+        stopBtn.disabled = true;
+        stopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Completing...';
+    }
+    if (pauseBtn) pauseBtn.style.display = 'none';
+    if (startBtn) startBtn.style.display = 'none';
+
+    // 2. Immediately stop audio loops & synths
+    try {
+        if (typeof stopAudioEngine === 'function') {
+            stopAudioEngine();
+        }
+    } catch (e) {
+        console.error('[AUDIO_STOP_ERROR]', e);
+    }
+
+    // 3. Immediately clear all timers
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+    }
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
     if (voiceUpdateInterval) {
         clearInterval(voiceUpdateInterval);
+        voiceUpdateInterval = null;
     }
-    
-    stopCamera();
-    window.removeEventListener('keydown', onSpacebarTap);
-    if (window.movementIntelligence && typeof window.movementIntelligence.reset === 'function') {
-        window.movementIntelligence.reset();
-    }
-    if (window.adaptiveEngine && typeof window.adaptiveEngine.reset === 'function') {
-        window.adaptiveEngine.reset();
-    }
-    if (window.nuroAgent && typeof window.nuroAgent.reset === 'function') {
-        window.nuroAgent.reset();
-    }
-    
+
+    // 4. Freeze duration and display
     sessionData.duration = getActiveDurationSeconds();
     if (pausedAt !== null) {
         totalPausedTime += (Date.now() - pausedAt);
         pausedAt = null;
     }
-    
     const minutes = Math.floor(sessionData.duration / 60);
     const seconds = sessionData.duration % 60;
     const timerEl = document.getElementById('sessionTimer');
     if (timerEl) {
         timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
-    
-    completeSessionOnServer();
+
+    // 5. Remove tactile spacebar listener
+    try {
+        window.removeEventListener('keydown', onSpacebarTap);
+    } catch (e) {}
+
+    // 6. Gather telemetry metrics BEFORE resetting tracking engines
+    let telemetryPayload = null;
+    let leftSteps = sessionData.leftStepsCount || 0;
+    let rightSteps = sessionData.rightStepsCount || 0;
+    let avgSymmetry = sessionData.averageSymmetry || 100;
+    let postureStability = 100;
+    const tapCount = tapState ? tapState.count : 0;
+    const tapCadence = tapState ? (tapState.cadence || Math.round(sessionData.currentBPM)) : 0;
+
+    try {
+        if (window.legTracker) {
+            leftSteps = sessionData.leftStepsCount || window.legTracker.leftStepsCount || 0;
+            rightSteps = sessionData.rightStepsCount || window.legTracker.rightStepsCount || 0;
+            avgSymmetry = sessionData.averageSymmetry || window.legTracker.averageSymmetry || 100;
+            postureStability = window.legTracker.balanceStabilityScore || 100;
+            if (typeof window.legTracker.getTelemetryPayload === 'function') {
+                telemetryPayload = window.legTracker.getTelemetryPayload(sessionData.id);
+            }
+        }
+    } catch (e) {
+        console.warn('[TELEMETRY_GATHER_ERROR]', e);
+    }
+
+    if (!telemetryPayload) {
+        telemetryPayload = {
+            schema_version: "2.0",
+            session_id: sessionData.id,
+            session_type: sessionData.sessionType,
+            measurement_quality: {
+                overall: tapCount > 5 ? 0.92 : 0.80,
+                tracking_coverage: 1.0,
+                critical_landmark_coverage: 1.0,
+                quality_state: tapCount > 5 ? 'GOOD' : 'FAIR'
+            },
+            gait: { valid: false, reason: "NOT_GAIT_SESSION" },
+            movement: {
+                tap_count: tapCount,
+                tap_cadence_tpm: tapCadence,
+                intertap_interval_mean_ms: (tapState && tapState.intertapMean) || 0,
+                intertap_interval_sd_ms: (tapState && tapState.intertapSd) || 0,
+                intertap_interval_cv: (tapState && tapState.intertapCv) || 0
+            },
+            sync: window.nuroSync ? window.nuroSync.getMetrics() : {
+                rhythm_alignment_score: sessionData.accuracyScore || 85,
+                on_time_pct: sessionData.accuracyScore || 85
+            }
+        };
+    }
+
+    try {
+        telemetryPayload.movement_intelligence = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
+        telemetryPayload.adaptive_state = window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null);
+        telemetryPayload.adaptation_decision = window.adaptiveEngine && typeof window.adaptiveEngine.getLastDecision === 'function' ? window.adaptiveEngine.getLastDecision() : null;
+        telemetryPayload.agent_state = window.latestAgentState || (window.nuroAgent && typeof window.nuroAgent.getCurrentState === 'function' ? window.nuroAgent.getCurrentState() : null);
+        telemetryPayload.agent_decision = window.nuroAgent && typeof window.nuroAgent.getCurrentReasoning === 'function' ? window.nuroAgent.getCurrentReasoning() : null;
+        telemetryPayload.agent_summary = window.nuroAgent && typeof window.nuroAgent.generateSessionSummary === 'function' ? window.nuroAgent.generateSessionSummary() : null;
+    } catch (e) {
+        console.warn('[NURO_PAYLOAD_ATTACH_ERROR]', e);
+    }
+
+    // 7. Safely stop camera and reset tracking engines
+    try {
+        stopCamera();
+    } catch (e) {
+        console.warn('[CAMERA_STOP_ERROR]', e);
+    }
+
+    try {
+        if (window.movementIntelligence && typeof window.movementIntelligence.reset === 'function') {
+            window.movementIntelligence.reset();
+        }
+        if (window.adaptiveEngine && typeof window.adaptiveEngine.reset === 'function') {
+            window.adaptiveEngine.reset();
+        }
+        if (window.nuroAgent && typeof window.nuroAgent.reset === 'function') {
+            window.nuroAgent.reset();
+        }
+    } catch (e) {
+        console.warn('[ENGINE_RESET_ERROR]', e);
+    }
+
+    // 8. Dispatch completion to server
+    await completeSessionOnServer({
+        duration: sessionData.duration,
+        final_bpm: sessionData.currentBPM,
+        accuracy_score: sessionData.accuracyScore,
+        left_steps: leftSteps,
+        right_steps: rightSteps,
+        gait_symmetry: avgSymmetry,
+        tap_count: tapCount,
+        tap_cadence: tapCadence,
+        posture_stability: postureStability,
+        metrics_data: telemetryPayload
+    });
 }
 
-async function completeSessionOnServer() {
+async function completeSessionOnServer(payload) {
     try {
-        const leftSteps = sessionData.leftStepsCount || (window.legTracker ? window.legTracker.leftStepsCount : 0);
-        const rightSteps = sessionData.rightStepsCount || (window.legTracker ? window.legTracker.rightStepsCount : 0);
-        const avgSymmetry = sessionData.averageSymmetry || (window.legTracker ? window.legTracker.averageSymmetry : 100);
-        const tapCount = tapState ? tapState.count : 0;
-        const tapCadence = tapState ? (tapState.cadence || Math.round(sessionData.currentBPM)) : 0;
-        const postureStability = window.legTracker ? window.legTracker.balanceStabilityScore : 100;
-
         let notes = `Completed ${modeConfig.title} session.`;
         if (sessionData.sessionType === 'gait_trainer') {
-            notes = `Completed Gait Trainer session with fused ML leg tracking. Symmetry: ${avgSymmetry}%. Steps: ${leftSteps} left / ${rightSteps} right.`;
+            notes = `Completed Gait Trainer session with fused ML leg tracking. Symmetry: ${payload.gait_symmetry}%. Steps: ${payload.left_steps} left / ${payload.right_steps} right.`;
         } else if (sessionData.sessionType === 'balance_training') {
-            notes = `Completed Balance Training session. Posture stability: ${postureStability}%. Lateral sway proxy recorded.`;
+            notes = `Completed Balance Training session. Posture stability: ${payload.posture_stability}%. Lateral sway proxy recorded.`;
         } else if (sessionData.sessionType === 'finger_tapping') {
-            notes = `Completed Finger Tapping session. Total taps: ${tapCount}, Cadence: ${tapCadence} TPM.`;
+            notes = `Completed Finger Tapping session. Total taps: ${payload.tap_count}, Cadence: ${payload.tap_cadence} TPM.`;
         } else if (sessionData.sessionType === 'speech_rhythm') {
             notes = `Completed Speech Rhythm session with rhythmic syllable pacing and vocal synchronization.`;
         }
 
-        // Gather comprehensive v2.0 telemetry payload
-        let metricsPayload = null;
-        if (window.legTracker && typeof window.legTracker.getTelemetryPayload === 'function') {
-            metricsPayload = window.legTracker.getTelemetryPayload(sessionData.id);
-        } else {
-            metricsPayload = {
-                schema_version: "2.0",
-                session_id: sessionData.id,
-                session_type: sessionData.sessionType,
-                measurement_quality: {
-                    overall: tapState.count > 5 ? 0.92 : 0.80,
-                    tracking_coverage: 1.0,
-                    critical_landmark_coverage: 1.0,
-                    quality_state: tapState.count > 5 ? 'GOOD' : 'FAIR'
-                },
-                gait: { valid: false, reason: "NOT_GAIT_SESSION" },
-                movement: {
-                    tap_count: tapState.count,
-                    tap_cadence_tpm: tapState.cadence,
-                    intertap_interval_mean_ms: tapState.intertapMean || 0,
-                    intertap_interval_sd_ms: tapState.intertapSd || 0,
-                    intertap_interval_cv: tapState.intertapCv || 0
-                },
-                sync: window.nuroSync ? window.nuroSync.getMetrics() : {
-                    rhythm_alignment_score: sessionData.accuracyScore || 85,
-                    on_time_pct: sessionData.accuracyScore || 85
-                }
-            };
-        }
-
-        if (metricsPayload) {
-            metricsPayload.movement_intelligence = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
-            metricsPayload.adaptive_state = window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null);
-            metricsPayload.adaptation_decision = window.adaptiveEngine && typeof window.adaptiveEngine.getLastDecision === 'function' ? window.adaptiveEngine.getLastDecision() : null;
-            metricsPayload.agent_state = window.latestAgentState || (window.nuroAgent && typeof window.nuroAgent.getCurrentState === 'function' ? window.nuroAgent.getCurrentState() : null);
-            metricsPayload.agent_decision = window.nuroAgent && typeof window.nuroAgent.getCurrentReasoning === 'function' ? window.nuroAgent.getCurrentReasoning() : null;
-            metricsPayload.agent_summary = window.nuroAgent && typeof window.nuroAgent.generateSessionSummary === 'function' ? window.nuroAgent.generateSessionSummary() : null;
-        }
+        const requestBody = {
+            duration: payload.duration,
+            final_bpm: payload.final_bpm,
+            accuracy_score: payload.accuracy_score,
+            left_steps: payload.left_steps,
+            right_steps: payload.right_steps,
+            gait_symmetry: payload.gait_symmetry,
+            tap_count: payload.tap_count,
+            tap_cadence: payload.tap_cadence,
+            posture_stability: payload.posture_stability,
+            metrics_data: payload.metrics_data,
+            notes: notes
+        };
 
         const response = await fetch(`/session/${sessionData.id}/complete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                duration: sessionData.duration,
-                final_bpm: sessionData.currentBPM,
-                accuracy_score: sessionData.accuracyScore,
-                left_steps: leftSteps,
-                right_steps: rightSteps,
-                gait_symmetry: avgSymmetry,
-                tap_count: tapCount,
-                tap_cadence: tapCadence,
-                posture_stability: postureStability,
-                metrics_data: metricsPayload,
-                notes: notes
-            })
+            body: JSON.stringify(requestBody)
         });
         
         let data = {};
@@ -1736,6 +1865,16 @@ async function completeSessionOnServer() {
             data = await response.json();
         } catch (e) {
             console.warn('Could not parse response JSON:', e);
+        }
+
+        // Authoritatively seal session state
+        sessionData.isCompleted = true;
+        sessionData.lifecycleState = 'COMPLETED';
+        isCompletingSession = false;
+
+        // Ensure audio is completely silent
+        if (typeof stopAudioEngine === 'function') {
+            stopAudioEngine();
         }
         
         if (response.ok && (data.success !== false)) {
@@ -1762,17 +1901,17 @@ async function completeSessionOnServer() {
                 if (metric3Label) metric3Label.textContent = 'Posture Sway';
                 if (metric4Label) metric4Label.textContent = 'Stability';
                 if (stepsEl) stepsEl.textContent = 'Centered';
-                if (symEl) symEl.textContent = `${Math.round(postureStability)}%`;
+                if (symEl) symEl.textContent = `${Math.round(payload.posture_stability)}%`;
             } else if (sessionData.sessionType === 'finger_tapping') {
                 if (metric3Label) metric3Label.textContent = 'Total Taps';
                 if (metric4Label) metric4Label.textContent = 'Cadence';
-                if (stepsEl) stepsEl.textContent = `${tapCount}`;
-                if (symEl) symEl.textContent = `${tapCadence} TPM`;
+                if (stepsEl) stepsEl.textContent = `${payload.tap_count}`;
+                if (symEl) symEl.textContent = `${payload.tap_cadence} TPM`;
             } else {
                 if (metric3Label) metric3Label.textContent = 'Steps (L/R)';
                 if (metric4Label) metric4Label.textContent = 'Symmetry';
-                if (stepsEl) stepsEl.textContent = `${leftSteps} / ${rightSteps}`;
-                if (symEl) symEl.textContent = `${avgSymmetry}%`;
+                if (stepsEl) stepsEl.textContent = `${payload.left_steps} / ${payload.right_steps}`;
+                if (symEl) symEl.textContent = `${payload.gait_symmetry}%`;
             }
             
             const feedbackText = data.feedback || "Terrific commitment to today's session! Regular rhythmic stimulation supports neuromuscular neuroplasticity.";
@@ -1832,10 +1971,23 @@ async function completeSessionOnServer() {
                 if (sAssess) sAssess.textContent = cr.soap_assessment || '--';
                 if (sPlan) sPlan.textContent = cr.soap_plan || '--';
             }
+
+            // Update on-page controls to clean completed state
+            const stopBtn = document.getElementById('stopBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const startBtn = document.getElementById('startBtn');
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (pauseBtn) pauseBtn.style.display = 'none';
+            if (startBtn) {
+                startBtn.style.display = 'inline-block';
+                startBtn.className = 'btn btn-primary btn-lg';
+                startBtn.innerHTML = '<i data-feather="rotate-ccw" class="me-2"></i>Start New Session';
+                startBtn.onclick = () => { window.location.reload(); };
+            }
             
             const modalEl = document.getElementById('sessionCompleteModal');
             if (modalEl && typeof bootstrap !== 'undefined') {
-                const completeModal = new bootstrap.Modal(modalEl);
+                const completeModal = bootstrap.Modal.getOrCreateInstance(modalEl);
                 if (typeof feather !== 'undefined') feather.replace();
                 completeModal.show();
             } else {
@@ -1843,11 +1995,15 @@ async function completeSessionOnServer() {
                 window.location.href = '/patient/dashboard';
             }
         } else {
+            console.error('Server sync failed during session completion:', data);
             alert('Session completed locally, but failed to sync with server.');
             window.location.href = '/patient/dashboard';
         }
     } catch (error) {
         console.error('Error completing session:', error);
+        sessionData.isCompleted = true;
+        sessionData.lifecycleState = 'COMPLETED';
+        isCompletingSession = false;
         alert('Session completed locally, but failed to sync with server.');
         window.location.href = '/patient/dashboard';
     }
@@ -1866,7 +2022,7 @@ function confirmExitSession() {
 }
 
 function updateTimer() {
-    if (!sessionData.startTime) return;
+    if (!sessionData.startTime || !sessionData.isRunning || sessionData.isCompleted) return;
     
     const elapsed = getActiveDurationSeconds();
     const minutes = Math.floor(elapsed / 60);
@@ -2529,7 +2685,14 @@ async function generateAiTrackModal() {
             if (statusEl) {
                 statusEl.innerHTML = `✅ Audio Track Ready (${res.engine_used}): <a href="${res.audio_url}" target="_blank" class="text-info text-decoration-underline fw-bold">Listen (WAV)</a>`;
             }
+            if (window.activeAiAudioTrack) {
+                try {
+                    window.activeAiAudioTrack.pause();
+                    window.activeAiAudioTrack.currentTime = 0;
+                } catch(e) {}
+            }
             const audioPreview = new Audio(res.audio_url);
+            window.activeAiAudioTrack = audioPreview;
             audioPreview.volume = 0.6;
             audioPreview.play().catch(e => console.log('Audio autoplay info:', e));
         } else {
