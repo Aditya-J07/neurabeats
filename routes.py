@@ -534,33 +534,53 @@ def complete_session(session_id):
 
 @app.route('/api/motion/telemetry', methods=['POST'])
 def motion_telemetry():
-    """Real-time movement analysis endpoint for live HUD & backend consumption"""
+    """Real-time movement analysis endpoint for live HUD & backend consumption (Schema v2.0)"""
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
         data = request.get_json() or {}
-        session_id = data.get('session_id')
-        knee_angle = data.get('knee_angle_deg')
-        torso_angle = data.get('torso_angle_deg')
-        cadence_spm = data.get('cadence_spm')
-        symmetry_score = data.get('symmetry_score')
-        sync_error_ms = data.get('sync_error_ms')
+        from services.measurement_service import measurement_service
+        feature_vector = measurement_service.extract_feature_vector(data)
+        session_id = data.get('session_id') or feature_vector.get('session_id')
 
         return jsonify({
             'status': 'received',
+            'schema_version': '2.0',
             'session_id': session_id,
-            'metrics': {
-                'knee_angle_deg': knee_angle,
-                'torso_angle_deg': torso_angle,
-                'cadence_spm': cadence_spm,
-                'symmetry_score': symmetry_score,
-                'sync_error_ms': sync_error_ms
-            }
+            'feature_vector': feature_vector
         })
     except Exception as e:
         logging.error(f"Error in motion telemetry: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/session/<int:session_id>/measurement-summary', methods=['GET'])
+def session_measurement_summary(session_id):
+    """Retrieve 5-section validated measurement summary for a session conforming to Section 43"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    therapy_session = TherapySession.query.get_or_404(session_id)
+    user = User.query.get(session['user_id'])
+
+    if session.get('user_type') == 'patient' and therapy_session.patient.user_id != user.id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    from services.measurement_service import measurement_service
+    from services.gemini_service import generate_validated_measurement_summary
+
+    raw_metrics = therapy_session.get_metrics()
+    feature_vector = measurement_service.extract_feature_vector(raw_metrics)
+    patient_name = f"{therapy_session.patient.user.first_name} {therapy_session.patient.user.last_name}"
+    condition = therapy_session.patient.condition or "Neurological Rehabilitation"
+
+    report_data = generate_validated_measurement_summary(feature_vector, patient_name, condition)
+    return jsonify({
+        'session_id': session_id,
+        'schema_version': '2.0',
+        'feature_vector': feature_vector,
+        'report': report_data.get('report')
+    })
 
 @app.route('/api/clinician/ai-report/<int:patient_id>', methods=['POST'])
 def generate_ai_report(patient_id):

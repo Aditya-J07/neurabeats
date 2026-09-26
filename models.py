@@ -140,6 +140,31 @@ class TherapySession(db.Model):
     def posture_stability(self):
         return self.get_metrics().get('posture_stability', 100 if self.session_type == 'balance_training' else 0)
 
+    @property
+    def cadence_spm(self):
+        m = self.get_metrics()
+        return m.get('gait', {}).get('cadence_spm') or m.get('final_bpm', self.final_bpm or 0)
+
+    @property
+    def cadence_cv(self):
+        return self.get_metrics().get('gait', {}).get('cadence_cv', 0.0)
+
+    @property
+    def temporal_asymmetry_pct(self):
+        return self.get_metrics().get('gait', {}).get('temporal_asymmetry_pct', 0.0)
+
+    @property
+    def rhythm_alignment_score(self):
+        return self.get_metrics().get('sync', {}).get('rhythm_alignment_score', self.accuracy_score or 0)
+
+    @property
+    def tracking_coverage(self):
+        return self.get_metrics().get('measurement_quality', {}).get('tracking_coverage', 1.0)
+
+    @property
+    def quality_state(self):
+        return self.get_metrics().get('measurement_quality', {}).get('state', 'UNKNOWN')
+
 class SessionMetrics(db.Model):
     __tablename__ = 'session_metrics'
     
