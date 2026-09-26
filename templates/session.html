@@ -512,22 +512,133 @@
                             </div>
                         </div>
 
-                        <!-- Beat Sound Selection & AI Synthesis -->
-                        <div class="mb-3 text-center">
-                            <label for="beatSoundSelect" class="form-label small mb-1">Beat Sound:</label>
-                            <div class="d-flex justify-content-center align-items-center gap-2" style="max-width: 320px; margin: 0 auto;">
-                                <select id="beatSoundSelect" class="form-select form-select-sm" onchange="changeBeatSound()">
-                                    <option value="metronome">Traditional Metronome</option>
-                                    <option value="drum">Drum Beat</option>
-                                    <option value="soft_bell">Soft Bell</option>
-                                    <option value="wooden_block">Wooden Block</option>
-                                    <option value="piano">Piano Note</option>
-                                </select>
-                                <button type="button" class="btn btn-outline-info btn-sm text-nowrap" id="btnAiSynthTrack" onclick="generateAiTrackModal()" title="Synthesize custom AI acoustic rhythm track">
-                                    <i data-feather="music" style="width: 12px; height: 12px;"></i> AI Track
+                        <!-- Beat Sound Selection & AI Synthesis (Cohesive Unified Component) -->
+                        <div class="mb-3 text-center" id="beatSoundControlWrapper">
+                            <label class="form-label small fw-semibold text-muted mb-1 d-block" style="font-size: 0.8rem; letter-spacing: 0.3px;">
+                                <i data-feather="volume-2" class="me-1" style="width: 13px; height: 13px; vertical-align: -1px; color: #01aac5;"></i>
+                                Beat Sound
+                            </label>
+
+                            <!-- Hidden select element preserving exact DOM API & legacy integration -->
+                            <select id="beatSoundSelect" class="d-none" onchange="changeBeatSound()">
+                                <option value="metronome" selected>Traditional Metronome</option>
+                                <option value="drum">Drum Beat</option>
+                                <option value="soft_bell">Soft Bell</option>
+                                <option value="wooden_block">Wooden Block</option>
+                                <option value="piano">Piano Note</option>
+                                <option value="ai_track">AI Track</option>
+                            </select>
+
+                            <!-- Custom Cohesive Dropdown Component -->
+                            <div class="dropdown d-inline-block text-start w-100" style="max-width: 270px;">
+                                <button class="btn btn-sm w-100 d-flex align-items-center justify-content-between px-3 py-2 beat-sound-trigger" 
+                                        type="button" 
+                                        id="beatSoundDropdownBtn" 
+                                        data-bs-toggle="dropdown" 
+                                        aria-expanded="false"
+                                        style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); font-size: 0.85rem; font-weight: 500; color: var(--text-primary, #042046); transition: all 0.15s ease;">
+                                    <span class="d-flex align-items-center text-truncate" id="beatSoundCurrentLabel">
+                                        <i data-feather="clock" class="me-2" style="width: 14px; height: 14px; color: #01aac5; flex-shrink: 0;"></i>
+                                        <span>Traditional Metronome</span>
+                                    </span>
+                                    <i data-feather="chevron-down" class="ms-2 text-muted" style="width: 13px; height: 13px; flex-shrink: 0;"></i>
                                 </button>
+
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1 mt-1 w-100" 
+                                    aria-labelledby="beatSoundDropdownBtn"
+                                    id="beatSoundDropdownMenu"
+                                    style="min-width: 270px; border-radius: 8px; border-color: var(--border-color, #e2e8f0); background: var(--card-bg, #ffffff); font-size: 0.84rem;">
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center px-3 py-2 active-beat-item" 
+                                                type="button" 
+                                                data-sound="metronome" 
+                                                onclick="selectBeatSoundOption('metronome', 'Traditional Metronome', 'clock')">
+                                            <i data-feather="clock" class="me-2" style="width: 14px; height: 14px; color: #01aac5;"></i>
+                                            <span class="flex-grow-1">Traditional Metronome</span>
+                                            <i data-feather="check" class="sound-check-icon text-info" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center px-3 py-2" 
+                                                type="button" 
+                                                data-sound="drum" 
+                                                onclick="selectBeatSoundOption('drum', 'Drum Beat', 'activity')">
+                                            <i data-feather="activity" class="me-2 text-muted" style="width: 14px; height: 14px;"></i>
+                                            <span class="flex-grow-1">Drum Beat</span>
+                                            <i data-feather="check" class="sound-check-icon d-none text-info" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center px-3 py-2" 
+                                                type="button" 
+                                                data-sound="soft_bell" 
+                                                onclick="selectBeatSoundOption('soft_bell', 'Soft Bell', 'bell')">
+                                            <i data-feather="bell" class="me-2 text-muted" style="width: 14px; height: 14px;"></i>
+                                            <span class="flex-grow-1">Soft Bell</span>
+                                            <i data-feather="check" class="sound-check-icon d-none text-info" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center px-3 py-2" 
+                                                type="button" 
+                                                data-sound="wooden_block" 
+                                                onclick="selectBeatSoundOption('wooden_block', 'Wooden Block', 'square')">
+                                            <i data-feather="square" class="me-2 text-muted" style="width: 14px; height: 14px;"></i>
+                                            <span class="flex-grow-1">Wooden Block</span>
+                                            <i data-feather="check" class="sound-check-icon d-none text-info" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center px-3 py-2" 
+                                                type="button" 
+                                                data-sound="piano" 
+                                                onclick="selectBeatSoundOption('piano', 'Piano Note', 'music')">
+                                            <i data-feather="music" class="me-2 text-muted" style="width: 14px; height: 14px;"></i>
+                                            <span class="flex-grow-1">Piano Note</span>
+                                            <i data-feather="check" class="sound-check-icon d-none text-info" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider my-1 opacity-50"></li>
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center px-3 py-2 ai-track-item" 
+                                                type="button" 
+                                                data-sound="ai_track" 
+                                                onclick="selectBeatSoundOption('ai_track', 'AI Track', 'zap')">
+                                            <i data-feather="zap" class="me-2" style="width: 14px; height: 14px; color: #01aac5;"></i>
+                                            <span class="flex-grow-1">AI Track</span>
+                                            <span class="badge rounded-pill me-2" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; font-size: 0.65rem; font-weight: 600; padding: 0.2rem 0.45rem;">AI</span>
+                                            <i data-feather="check" class="sound-check-icon d-none text-info" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    </li>
+                                </ul>
                             </div>
-                            <div id="aiTrackStatus" class="small mt-1 text-info" style="display: none; font-size: 0.75rem;"></div>
+
+                            <style>
+                                .beat-sound-trigger:hover {
+                                    border-color: #01aac5 !important;
+                                }
+                                .beat-sound-trigger:focus {
+                                    box-shadow: 0 0 0 2px rgba(1, 170, 197, 0.25) !important;
+                                }
+                                #beatSoundDropdownMenu .dropdown-item:hover {
+                                    background-color: rgba(1, 170, 197, 0.08) !important;
+                                    color: var(--text-primary, #042046) !important;
+                                }
+                                #beatSoundDropdownMenu .dropdown-item.active-beat-item {
+                                    background-color: rgba(1, 170, 197, 0.12) !important;
+                                    color: #01aac5 !important;
+                                    font-weight: 600;
+                                }
+                                #beatSoundDropdownMenu .dropdown-item {
+                                    color: var(--text-primary, #042046);
+                                    border-radius: 6px;
+                                    margin: 2px 4px;
+                                    width: auto;
+                                }
+                            </style>
+
+                            <!-- Audio Track Generation Status & Audio Preview Link -->
+                            <div id="aiTrackStatus" class="small mt-1 text-info text-center" style="display: none; font-size: 0.75rem; max-width: 270px; margin: 0 auto; line-height: 1.4;"></div>
                         </div>
 
                         <!-- Session Timer -->
@@ -2253,9 +2364,49 @@ function changeBeatSound() {
     sessionData.selectedBeatSound = selectedSound;
     
     if (sessionData.isRunning && typeof changeSoundType === 'function') {
-        changeSoundType(selectedSound);
+        changeSoundType(selectedSound === 'ai_track' ? 'drum' : selectedSound);
     }
     console.log(`Beat sound changed to: ${selectedSound}`);
+}
+
+function selectBeatSoundOption(soundVal, soundLabel, iconName) {
+    const soundSelect = document.getElementById('beatSoundSelect');
+    if (soundSelect) {
+        soundSelect.value = soundVal;
+        changeBeatSound();
+    }
+    
+    const currentLabelEl = document.getElementById('beatSoundCurrentLabel');
+    if (currentLabelEl) {
+        currentLabelEl.innerHTML = `<i data-feather="${iconName}" class="me-2" style="width: 14px; height: 14px; color: #01aac5; flex-shrink: 0;"></i><span>${soundLabel}</span>`;
+    }
+    
+    const menuItems = document.querySelectorAll('#beatSoundDropdownMenu .dropdown-item');
+    menuItems.forEach(item => {
+        const check = item.querySelector('.sound-check-icon');
+        const icon = item.querySelector('i:first-child');
+        if (item.getAttribute('data-sound') === soundVal) {
+            item.classList.add('active-beat-item');
+            if (check) check.classList.remove('d-none');
+            if (icon) {
+                icon.style.color = '#01aac5';
+                icon.classList.remove('text-muted');
+            }
+        } else {
+            item.classList.remove('active-beat-item');
+            if (check) check.classList.add('d-none');
+            if (icon && item.getAttribute('data-sound') !== 'ai_track') {
+                icon.style.color = '';
+                icon.classList.add('text-muted');
+            }
+        }
+    });
+
+    if (typeof feather !== 'undefined') feather.replace();
+
+    if (soundVal === 'ai_track' && typeof generateAiTrackModal === 'function') {
+        generateAiTrackModal();
+    }
 }
 
 // ==================================================
@@ -2355,7 +2506,7 @@ function runDemoPhase(phase) {
 
 // Section 44: AI Audio Track Synthesizer (Hugging Face + Acoustic Fallback)
 async function generateAiTrackModal() {
-    const btn = document.getElementById('btnAiSynthTrack');
+    const btn = document.getElementById('btnAiSynthTrack') || document.getElementById('beatSoundDropdownBtn');
     const statusEl = document.getElementById('aiTrackStatus');
     if (btn) btn.disabled = true;
     if (statusEl) {
