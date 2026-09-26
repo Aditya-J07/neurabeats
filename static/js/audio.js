@@ -498,17 +498,27 @@ function getSoundConfig(soundType) {
 function triggerBeatVisualization() {
     const beatIndicator = document.getElementById('beatIndicator');
     const beatVisualizer = document.getElementById('beatVisualizer');
+    const syllablePrompt = document.getElementById('speechSyllablePrompt');
 
     if (beatIndicator && beatVisualizer) {
         // Scale animation for beat indicator
-        beatIndicator.style.transform = 'scale(1.2)';
-        beatVisualizer.style.borderColor = '#28a745';
+        beatIndicator.style.transform = 'scale(1.25)';
+        beatVisualizer.style.borderColor = '#01aac5';
 
         // Reset after short duration
         setTimeout(() => {
             beatIndicator.style.transform = 'scale(0.8)';
-            beatVisualizer.style.borderColor = '#dee2e6';
-        }, 100);
+            beatVisualizer.style.borderColor = 'var(--neuro-primary-border, #e2e8f0)';
+        }, 110);
+    }
+
+    if (syllablePrompt) {
+        syllablePrompt.style.transform = 'scale(1.08)';
+        syllablePrompt.style.color = '#38bdf8';
+        setTimeout(() => {
+            syllablePrompt.style.transform = 'scale(1.0)';
+            syllablePrompt.style.color = '#00e5ff';
+        }, 120);
     }
 }
 

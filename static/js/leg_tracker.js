@@ -221,41 +221,128 @@ class LegKinematicsTracker {
 
     drawSkeletonOverlay(landmarks) {
         if (!this.overlayCanvas || !this.overlayCtx) return;
+        
+        // Ensure overlay canvas drawing buffer matches video resolution exactly
+        if (this.videoElement && this.videoElement.videoWidth > 0) {
+            if (this.overlayCanvas.width !== this.videoElement.videoWidth || this.overlayCanvas.height !== this.videoElement.videoHeight) {
+                this.overlayCanvas.width = this.videoElement.videoWidth;
+                this.overlayCanvas.height = this.videoElement.videoHeight;
+            }
+        }
+
         const w = this.overlayCanvas.width;
         const h = this.overlayCanvas.height;
         const ctx = this.overlayCtx;
 
         ctx.clearRect(0, 0, w, h);
 
-        const legConnections = [
-            [23, 24], // Hip to hip
-            [23, 25], [25, 27], [27, 31], // Left leg: hip -> knee -> ankle -> foot
-            [24, 26], [26, 28], [28, 32]  // Right leg: hip -> knee -> ankle -> foot
+        if (!landmarks || landmarks.length < 33) return;
+
+        // Anatomical Body Segments
+        const coreTorso = [
+            [11, 12], // Left shoulder to Right shoulder
+            [11, 23], // Left shoulder to Left hip
+            [12, 24], // Right shoulder to Right hip
+            [23, 24]  // Left hip to Right hip
         ];
 
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#01aac5';
-        ctx.fillStyle = '#10b981';
+        const headFace = [
+            [0, 1], [1, 2], [2, 3], [3, 7], // Left eye and ear
+            [0, 4], [4, 5], [5, 6], [6, 8], // Right eye and ear
+            [9, 10] // Mouth
+        ];
 
-        legConnections.forEach(([i, j]) => {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-            if (p1 && p2 && (p1.visibility || 1) > 0.3 && (p2.visibility || 1) > 0.3) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x * w, p1.y * h);
-                ctx.lineTo(p2.x * w, p2.y * h);
-                ctx.stroke();
-            }
-        });
+        const leftArm = [
+            [11, 13], [13, 15], // Shoulder -> Elbow -> Wrist
+            [15, 17], [15, 19], [15, 21] // Wrist -> Pinky, Index, Thumb
+        ];
 
-        [23, 24, 25, 26, 27, 28, 31, 32].forEach(idx => {
-            const p = landmarks[idx];
-            if (p && (p.visibility || 1) > 0.3) {
-                ctx.beginPath();
-                ctx.arc(p.x * w, p.y * h, idx >= 27 ? 5 : 4, 0, 2 * Math.PI);
-                ctx.fill();
+        const rightArm = [
+            [12, 14], [14, 16], // Shoulder -> Elbow -> Wrist
+            [16, 18], [16, 20], [16, 22] // Wrist -> Pinky, Index, Thumb
+        ];
+
+        const leftLeg = [
+            [23, 25], [25, 27], // Hip -> Knee -> Ankle
+            [27, 29], [29, 31], [27, 31] // Ankle -> Heel -> Foot index
+        ];
+
+        const rightLeg = [
+            [24, 26], [26, 28], // Hip -> Knee -> Ankle
+            [28, 30], [30, 32], [28, 32] // Ankle -> Heel -> Foot index
+        ];
+
+        const drawSegment = (connections, strokeStyle, lineWidth) => {
+            ctx.strokeStyle = strokeStyle;
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            connections.forEach(([i, j]) => {
+                const p1 = landmarks[i];
+                const p2 = landmarks[j];
+                const v1 = (p1 && typeof p1.visibility === 'number') ? p1.visibility : 1;
+                const v2 = (p2 && typeof p2.visibility === 'number') ? p2.visibility : 1;
+
+                if (p1 && p2 && v1 > 0.35 && v2 > 0.35) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x * w, p1.y * h);
+                    ctx.lineTo(p2.x * w, p2.y * h);
+                    ctx.stroke();
+                }
+            });
+        };
+
+        // 1. Draw connecting skeleton lines
+        drawSegment(coreTorso, '#01aac5', 4);  // Core/Torso in Medical Teal
+        drawSegment(headFace, 'rgba(148, 163, 184, 0.7)', 2); // Head/Face subtle
+        drawSegment(leftArm, '#00e5ff', 3.5);   // Left Arm in Cyan
+        drawSegment(rightArm, '#10b981', 3.5);  // Right Arm in Emerald
+        drawSegment(leftLeg, '#00e5ff', 3.5);   // Left Leg in Cyan
+        drawSegment(rightLeg, '#10b981', 3.5);  // Right Leg in Emerald
+
+        // 2. Draw anatomical landmark joint nodes
+        for (let i = 0; i < landmarks.length; i++) {
+            const p = landmarks[i];
+            const vis = (p && typeof p.visibility === 'number') ? p.visibility : 1;
+            if (!p || vis <= 0.35) continue;
+
+            const px = p.x * w;
+            const py = p.y * h;
+
+            let fillColor = '#01aac5';
+            let radius = 4;
+
+            if (i >= 11 && i % 2 === 1) {
+                // Left side limbs (odd numbers >= 11)
+                fillColor = '#00e5ff';
+                radius = (i === 11 || i === 23 || i === 25) ? 6 : 4.5;
+            } else if (i >= 12 && i % 2 === 0) {
+                // Right side limbs (even numbers >= 12)
+                fillColor = '#10b981';
+                radius = (i === 12 || i === 24 || i === 26) ? 6 : 4.5;
+            } else if (i === 0) {
+                // Nose
+                fillColor = '#38bdf8';
+                radius = 4;
+            } else if (i <= 10) {
+                // Other facial landmarks
+                fillColor = '#94a3b8';
+                radius = 2.5;
             }
-        });
+
+            // Outer white glow/ring for contrast against dark and light clothes
+            ctx.beginPath();
+            ctx.arc(px, py, radius + 1.5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            // Inner colored joint node
+            ctx.beginPath();
+            ctx.arc(px, py, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = fillColor;
+            ctx.fill();
+        }
     }
 
     /**
@@ -457,33 +544,36 @@ const legTrackerInstance = new LegKinematicsTracker();
 window.legTracker = legTrackerInstance;
 
 /**
- * Fusion Gating Logic: Combines Tier 1 Pixel Differencing with Tier 2 Leg Model
+ * Fusion Gating Logic: Combines Tier 1 Pixel Differencing with Tier 2 Full-Body Pose Model
  */
 async function runFusedLegTracking(diffScore) {
     const videoElement = document.getElementById('cameraFeed');
+    if (!videoElement || videoElement.readyState < 2) return;
 
-    // 1. If Tier 1 says no movement, skip heavy pose inference & mark idle
-    if (diffScore < MOTION_THRESHOLD) {
-        legTrackerInstance.updateLegUI({
-            status: 'Idle / Standing Still',
-            activeLeg: 'None',
-            leftConfidence: 0,
-            rightConfidence: 0
-        });
-        return;
-    }
-
-    // 2. Tier 1 confirms movement -> Run Leg ML Model
     try {
+        // Run full pose landmark estimation (which updates skeleton overlay continuously)
         const legResults = await legTrackerInstance.estimateLegs(videoElement);
-        if (legResults && legResults.confidence > 0.5) {
+
+        // 1. If movement is below threshold, keep skeleton visible but mark motion state as Idle
+        if (diffScore < MOTION_THRESHOLD) {
+            legTrackerInstance.updateLegUI({
+                status: 'Idle / Standing Still',
+                activeLeg: 'None',
+                leftConfidence: 0,
+                rightConfidence: 0
+            });
+            return;
+        }
+
+        // 2. Active motion confirmed -> Process step events and rhythm kinematics
+        if (legResults && legResults.confidence > 0.4) {
             legTrackerInstance.handleLegStepEvent(legResults);
         } else {
-            // Low confidence fallback: use existing motion calculation
+            // Resilient fallback if confidence is low
             legTrackerInstance.useLightweightFallback(diffScore);
         }
     } catch (err) {
-        console.warn('ML Leg tracking error, falling back to pixel motion:', err);
+        console.warn('Pose tracking error, falling back to pixel motion:', err);
         legTrackerInstance.useLightweightFallback(diffScore);
     }
 }

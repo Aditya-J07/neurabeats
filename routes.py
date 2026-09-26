@@ -181,6 +181,61 @@ def patient_dashboard():
                          total_sessions=total_sessions,
                          avg_accuracy=round(avg_accuracy, 1))
 
+@app.route('/api/patient/recent-sessions')
+def api_patient_recent_sessions():
+    """API endpoint for live real-time dashboard session updates"""
+    if 'user_id' not in session or session.get('user_type') != 'patient':
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user = User.query.get(session['user_id'])
+    if not user or not user.patient_profile:
+        return jsonify({'error': 'Patient profile not found'}), 404
+
+    patient_profile = user.patient_profile
+    recent = TherapySession.query.filter_by(
+        patient_id=patient_profile.id
+    ).order_by(TherapySession.start_time.desc()).limit(6).all()
+
+    total_sessions = TherapySession.query.filter_by(
+        patient_id=patient_profile.id, 
+        completed=True
+    ).count()
+
+    avg_accuracy = db.session.query(db.func.avg(TherapySession.accuracy_score)).filter_by(
+        patient_id=patient_profile.id,
+        completed=True
+    ).scalar() or 0
+
+    sessions_data = []
+    for s in recent:
+        if s.completed and s.duration_seconds is not None:
+            if s.duration_seconds < 60:
+                duration_str = f"{s.duration_seconds}s"
+            else:
+                m = s.duration_seconds // 60
+                sec = s.duration_seconds % 60
+                duration_str = f"{m}m {sec}s" if sec > 0 else f"{m} min"
+        elif s.completed:
+            duration_str = "< 1 min"
+        else:
+            duration_str = "In Progress"
+
+        sessions_data.append({
+            'id': s.id,
+            'date': s.start_time.strftime('%m/%d/%Y %I:%M %p') if s.start_time else 'Recently',
+            'type': s.session_type.replace('_', ' ').title(),
+            'completed': s.completed,
+            'duration': duration_str,
+            'accuracy': round(s.accuracy_score) if s.accuracy_score is not None else None,
+            'bpm_range': f"{round(s.initial_bpm)} - {round(s.final_bpm or s.target_bpm or s.initial_bpm)}"
+        })
+
+    return jsonify({
+        'total_sessions': total_sessions,
+        'avg_accuracy': round(avg_accuracy, 1),
+        'sessions': sessions_data
+    })
+
 @app.route('/clinician/dashboard')
 def clinician_dashboard():
     """Clinician dashboard - patient management interface"""

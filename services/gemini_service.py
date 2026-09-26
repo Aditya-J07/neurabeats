@@ -182,7 +182,19 @@ def _generate_deterministic_clinical_fallback(patient_name: str, condition: str,
 - **P (Plan):** Continue current exercise regimen. Advance target cadence by +3 to +5 BPM if average accuracy exceeds 80% over next 3 sessions."""
 
 def _generate_deterministic_patient_feedback(session_type: str, accuracy: float, symmetry: float = 0, left_steps: int = 0, right_steps: int = 0) -> str:
-    """Deterministic patient recovery feedback when API key is missing or offline."""
+    """Deterministic patient recovery feedback tailored to therapy modality."""
+    if session_type in ['speech_rhythm', 'melodic_intonation']:
+        if accuracy >= 80:
+            return f"Wonderful work maintaining vocal rhythm today with {round(accuracy)}% rhythm synchronization accuracy! Take a few sips of water, rest your vocal cords, and relax before your next session."
+        else:
+            return f"Great effort practicing your speech rhythm today—consistent vocal pacing stimulates neural pathway recovery! Rest your voice and hydrate comfortably."
+
+    if session_type == 'balance_training':
+        if accuracy >= 80:
+            return f"Excellent postural stability today with {round(accuracy)}% balance alignment! Take a few minutes to sit down, relax, and let your stabilizing muscles rest."
+        else:
+            return f"Good commitment to your balance training today—every session strengthens your core stability and center of gravity! Rest comfortably in a seated position."
+
     total_steps = left_steps + right_steps
     step_phrase = f" and {total_steps} bilateral steps" if total_steps > 0 else ""
     sym_phrase = f" with {round(symmetry)}% symmetry" if symmetry > 0 else ""

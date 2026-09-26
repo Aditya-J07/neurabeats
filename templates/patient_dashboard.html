@@ -34,7 +34,7 @@
                 <div class="card">
                     <div class="card-body text-center">
                         <i data-feather="activity" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ total_sessions }}</h4>
+                        <h4 id="dashTotalSessions">{{ total_sessions }}</h4>
                         <p class="text-muted mb-0">Total Sessions</p>
                     </div>
                 </div>
@@ -43,7 +43,7 @@
                 <div class="card">
                     <div class="card-body text-center">
                         <i data-feather="target" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ avg_accuracy }}%</h4>
+                        <h4 id="dashAvgAccuracy">{{ avg_accuracy }}%</h4>
                         <p class="text-muted mb-0">Avg Accuracy</p>
                     </div>
                 </div>
@@ -247,21 +247,37 @@
                                     <th>BPM Range</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="recentSessionsTableBody">
                                 {% for session in recent_sessions %}
                                 <tr>
                                     <td>{{ session.start_time.strftime('%m/%d/%Y %I:%M %p') }}</td>
                                     <td>
-                                        <span class="badge bg-primary">{{ session.session_type.replace('_', ' ').title() }}</span>
+                                        <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
+                                            {{ session.session_type.replace('_', ' ').title() }}
+                                        </span>
                                     </td>
-                                    <td>{{ (session.duration_seconds // 60) if session.duration_seconds else 'N/A' }} min</td>
                                     <td>
-                                        {% if session.accuracy_score %}
+                                        {% if session.completed %}
+                                            {% if session.duration_seconds and session.duration_seconds < 60 %}
+                                                {{ session.duration_seconds }}s
+                                            {% elif session.duration_seconds %}
+                                                {{ (session.duration_seconds // 60) }}m {{ (session.duration_seconds % 60) }}s
+                                            {% else %}
+                                                &lt; 1 min
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark"><i data-feather="clock" style="width: 11px; height: 11px; vertical-align: -1px;"></i> In Progress</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if session.completed and session.accuracy_score is not none %}
                                             <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
                                                 {{ session.accuracy_score|round|int }}%
                                             </span>
+                                        {% elif not session.completed %}
+                                            <span class="text-muted small">In Progress</span>
                                         {% else %}
-                                            N/A
+                                            <span class="text-muted small">Completed</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ session.initial_bpm|round|int }} - {{ session.final_bpm|round|int if session.final_bpm else session.initial_bpm|round|int }}</td>
@@ -459,5 +475,60 @@ async function startStrokeSession(sessionType) {
         alert('Failed to start session: ' + (error.message || 'Please try again.'));
     }
 }
+
+// Live real-time dashboard updates
+async function refreshRecentSessions() {
+    try {
+        const response = await fetch('/api/patient/recent-sessions');
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        // Update stats
+        const totalEl = document.getElementById('dashTotalSessions');
+        if (totalEl && data.total_sessions !== undefined) totalEl.textContent = data.total_sessions;
+        
+        const avgAccEl = document.getElementById('dashAvgAccuracy');
+        if (avgAccEl && data.avg_accuracy !== undefined) avgAccEl.textContent = `${data.avg_accuracy}%`;
+
+        // Update table
+        const tbody = document.getElementById('recentSessionsTableBody');
+        if (!tbody || !data.sessions || data.sessions.length === 0) return;
+
+        let rowsHtml = '';
+        data.sessions.forEach(s => {
+            let durationHtml = '';
+            if (s.completed) {
+                durationHtml = s.duration;
+            } else {
+                durationHtml = '<span class="badge bg-warning text-dark"><i data-feather="clock" style="width: 11px; height: 11px; vertical-align: -1px;"></i> In Progress</span>';
+            }
+
+            let accHtml = '';
+            if (s.completed && s.accuracy !== null && s.accuracy !== undefined) {
+                const badgeClass = s.accuracy >= 80 ? 'bg-success' : (s.accuracy >= 60 ? 'bg-warning' : 'bg-danger');
+                accHtml = `<span class="badge ${badgeClass}">${s.accuracy}%</span>`;
+            } else if (!s.completed) {
+                accHtml = '<span class="text-muted small">In Progress</span>';
+            } else {
+                accHtml = '<span class="text-muted small">Completed</span>';
+            }
+
+            rowsHtml += `<tr>
+                <td>${s.date}</td>
+                <td><span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">${s.type}</span></td>
+                <td>${durationHtml}</td>
+                <td>${accHtml}</td>
+                <td>${s.bpm_range}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = rowsHtml;
+        if (typeof feather !== 'undefined') feather.replace();
+    } catch (e) {
+        // Silent catch for background polling
+    }
+}
+
+// Auto-refresh every 8 seconds
+setInterval(refreshRecentSessions, 8000);
 </script>
 {% endblock %}

@@ -6,12 +6,18 @@
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card">
-            <div class="card-header text-center">
-                <h4 class="card-title mb-0">
-                    <i data-feather="clipboard" class="me-2"></i>
-                    Baseline Assessment
-                </h4>
-                <p class="text-muted mb-0">Establish baseline measurements for personalized therapy</p>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <a href="{{ url_for('clinician_dashboard') if session.get('user_type') == 'clinician' else url_for('patient_dashboard') }}" class="btn btn-outline-secondary btn-sm" id="btnBackToDashboard">
+                    <i data-feather="arrow-left" class="me-1"></i> Back to Dashboard
+                </a>
+                <div class="text-center flex-grow-1">
+                    <h4 class="card-title mb-0">
+                        <i data-feather="clipboard" class="me-2"></i>
+                        Baseline Assessment
+                    </h4>
+                    <p class="text-muted mb-0 small">Establish baseline measurements for personalized therapy</p>
+                </div>
+                <div style="width: 130px;" class="d-none d-md-block"></div>
             </div>
             <div class="card-body">
                 <!-- Assessment Type Selection -->

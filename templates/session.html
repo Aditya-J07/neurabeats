@@ -8,47 +8,69 @@
         <div class="card mb-4">
             <div class="card-header">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div>
-                        <h4 class="card-title mb-1">
-                            {% if therapy_session.session_type == 'speech_rhythm' %}
-                                <i data-feather="mic" class="me-2"></i>
-                                Speech Rhythm Session
-                            {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                <i data-feather="activity" class="me-2"></i>
-                                Upper Limb Motor Session
-                            {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                <i data-feather="music" class="me-2"></i>
-                                Melodic Intonation Therapy
-                            {% elif therapy_session.session_type == 'cognitive_rhythm' %}
-                                <i data-feather="zap" class="me-2"></i>
-                                Cognitive Rhythm Session
-                            {% else %}
-                                <i data-feather="headphones" class="me-2"></i>
-                                Gait Trainer Session
-                            {% endif %}
-                        </h4>
-                        <p class="text-muted mb-0 small">
-                            {% if therapy_session.session_type == 'speech_rhythm' %}
-                                Practice speech rhythm with syllable timing, pronunciation, and visual face framing
-                            {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                Coordinate arm and hand movements with rhythmic beats and camera motion tracking
-                            {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                Use singing and melody to improve speech and language with visual engagement
-                            {% elif therapy_session.session_type == 'cognitive_rhythm' %}
-                                Enhance attention, memory and cognitive function through rhythm
-                            {% else %}
-                                Synchronize your steps with the beat with full-body camera motion guidance and fused ML leg tracking
-                            {% endif %}
-                        </p>
+                    <div class="d-flex align-items-center gap-3">
+                        <a href="{{ url_for('patient_dashboard') }}" class="btn btn-outline-secondary btn-sm" id="btnBackToDashboard" onclick="return confirmExitSession();" style="border-radius: 6px; padding: 0.35rem 0.75rem;">
+                            <i data-feather="arrow-left" class="me-1"></i> Dashboard
+                        </a>
+                        <div>
+                            <h4 class="card-title mb-1">
+                                {% if therapy_session.session_type == 'speech_rhythm' %}
+                                    <i data-feather="mic" class="me-2" style="color: #01aac5;"></i>
+                                    Speech Rhythm Session
+                                {% elif therapy_session.session_type == 'upper_limb_motor' %}
+                                    <i data-feather="activity" class="me-2" style="color: #01aac5;"></i>
+                                    Upper Limb Motor Session
+                                {% elif therapy_session.session_type == 'melodic_intonation' %}
+                                    <i data-feather="music" class="me-2" style="color: #01aac5;"></i>
+                                    Melodic Intonation Therapy
+                                {% elif therapy_session.session_type == 'balance_training' %}
+                                    <i data-feather="target" class="me-2" style="color: #01aac5;"></i>
+                                    Balance Training Session
+                                {% elif therapy_session.session_type == 'finger_tapping' %}
+                                    <i data-feather="check-circle" class="me-2" style="color: #01aac5;"></i>
+                                    Finger Tapping Session
+                                {% elif therapy_session.session_type == 'cognitive_rhythm' %}
+                                    <i data-feather="zap" class="me-2" style="color: #01aac5;"></i>
+                                    Cognitive Rhythm Session
+                                {% else %}
+                                    <i data-feather="headphones" class="me-2" style="color: #01aac5;"></i>
+                                    Gait Trainer Session
+                                {% endif %}
+                            </h4>
+                            <p class="text-muted mb-0 small">
+                                {% if therapy_session.session_type == 'speech_rhythm' %}
+                                    Practice speech rhythm with syllable timing, audio rhythm synchronization, and vocal exercise
+                                {% elif therapy_session.session_type == 'upper_limb_motor' %}
+                                    Coordinate arm and hand movements with rhythmic beats and real-time skeleton motion tracking
+                                {% elif therapy_session.session_type == 'melodic_intonation' %}
+                                    Use singing and melodic intonation to improve speech fluency with auditory rhythm cues
+                                {% elif therapy_session.session_type == 'balance_training' %}
+                                    Improve stability, posture alignment, and center-of-gravity balance with rhythmic auditory cues and full-body posture tracking
+                                {% elif therapy_session.session_type == 'finger_tapping' %}
+                                    Enhance fine motor coordination and finger tapping speed aligned with auditory rhythmic stimulation
+                                {% elif therapy_session.session_type == 'cognitive_rhythm' %}
+                                    Enhance attention, memory, and cognitive sequencing through rhythmic auditory stimulation
+                                {% else %}
+                                    Synchronize your steps with the beat with full-body camera motion guidance and fused ML leg tracking
+                                {% endif %}
+                            </p>
+                        </div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
                             Session #{{ therapy_session.id }} &bull; {{ therapy_session.session_type.replace('_', ' ').title() }}
                         </span>
-                        <span class="badge bg-secondary" id="cameraStatusBadge">
-                            <i data-feather="video-off" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
-                            Camera Off
-                        </span>
+                        {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                            <span class="badge bg-success" id="speechMicStatusBadge">
+                                <i data-feather="mic" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+                                Microphone Ready
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary" id="cameraStatusBadge">
+                                <i data-feather="video-off" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+                                Camera Off
+                            </span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -56,7 +78,64 @@
             <div class="card-body">
                 <!-- Two-Column Interactive Session Layout -->
                 <div class="row g-4 align-items-stretch">
-                    <!-- Left Column: Therapy Session Camera -->
+                    {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                    <!-- Left Column: Speech Rhythm Studio (Microphone / Vocal Pacing - Camera Not Required) -->
+                    <div class="col-lg-6">
+                        <div class="camera-card-wrapper d-flex flex-column justify-content-between h-100" style="min-height: 380px;">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="fw-semibold small text-theme-adaptive">
+                                        <i data-feather="mic" class="me-1" style="width: 14px; height: 14px; color: #01aac5;"></i>
+                                        Vocal Rhythm & Acoustic Studio
+                                    </span>
+                                    <span class="badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
+                                        Microphone Sensing
+                                    </span>
+                                </div>
+
+                                <!-- Speech Pacing Prompt Display -->
+                                <div class="p-4 rounded-3 text-center mb-3" style="background: #041421; border: 1px solid rgba(1, 170, 197, 0.3); position: relative; overflow: hidden;">
+                                    <div class="text-uppercase tracking-wider small text-muted mb-2">Rhythmic Syllable Target</div>
+                                    <div id="speechSyllablePrompt" style="font-size: 2.2rem; font-weight: 800; letter-spacing: 4px; color: #00e5ff; transition: transform 0.1s ease, color 0.1s ease;">
+                                        TA &mdash; TA &mdash; TA &mdash; TA
+                                    </div>
+                                    <div class="small text-muted mt-2" id="speechPromptSubtext">
+                                        Vocalize each syllable on the rhythmic metronome beat
+                                    </div>
+                                </div>
+
+                                <!-- Microphone Status & Live Audio Level -->
+                                <div class="card p-3 mb-3 border-0" style="background: rgba(1, 170, 197, 0.06); border-radius: 8px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small fw-semibold text-theme-adaptive">
+                                            <i data-feather="volume-2" class="me-1" style="width: 13px; height: 13px; color: #01aac5;"></i>
+                                            Vocal Energy & Microphone Level:
+                                        </span>
+                                        <span class="badge bg-success" id="vocalStatusPill">
+                                            Microphone Active
+                                        </span>
+                                    </div>
+                                    <div style="height: 10px; background: rgba(0,0,0,0.15); border-radius: 6px; overflow: hidden;">
+                                        <div id="speechVolumeMeter" style="height: 100%; width: 0%; background: linear-gradient(90deg, #01aac5, #10b981); transition: width 0.08s ease;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Speech Articulation Summary -->
+                            <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                                <div>
+                                    <small class="text-muted d-block">Therapy Modality</small>
+                                    <strong class="text-theme-adaptive" style="font-size: 0.92rem;">Rhythmic Auditory Stimulation (RAS)</strong>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block">Target Cadence</small>
+                                    <strong class="text-info" style="font-size: 0.95rem;">{{ therapy_session.initial_bpm|round|int }} SPM</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <!-- Left Column: Therapy Session Camera (Gait, Balance, Upper Limb) -->
                     <div class="col-lg-6">
                         <div class="camera-card-wrapper">
                             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -66,12 +145,12 @@
                                         Full-Body / Movement View
                                     {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                         Upper-Body / Arm Movement View
-                                    {% elif therapy_session.session_type == 'speech_rhythm' %}
-                                        Face / User Positioning View
-                                    {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                        Face & Upper-Body View
+                                    {% elif therapy_session.session_type == 'balance_training' %}
+                                        Full-Body / Balance Posture View
+                                    {% elif therapy_session.session_type == 'finger_tapping' %}
+                                        Hand & Finger Coordination View
                                     {% else %}
-                                        User Engagement View
+                                        Visual Engagement View
                                     {% endif %}
                                 </span>
                                 <span class="badge bg-secondary" id="cameraModeBadge">
@@ -79,22 +158,22 @@
                                         Fused Leg Tracking
                                     {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                         Arm Tracking
-                                    {% elif therapy_session.session_type == 'speech_rhythm' %}
-                                        Face Framing
-                                    {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                        Posture View
+                                    {% elif therapy_session.session_type == 'balance_training' %}
+                                        Posture & Stability Tracking
+                                    {% elif therapy_session.session_type == 'finger_tapping' %}
+                                        Finger Tapping Tracking
                                     {% else %}
-                                        Visual View
+                                        Pose Tracking
                                     {% endif %}
                                 </span>
                             </div>
 
-                            <!-- Camera Viewport Box -->
-                            <div class="camera-preview-box mb-2" id="cameraBox" style="position: relative; overflow: hidden; background: #0f172a; min-height: 280px; border-radius: 8px;">
+                            <!-- Camera Viewport Box (Aspect Ratio 4:3 with Mirrored Video & Overlay) -->
+                            <div class="camera-preview-box mb-2" id="cameraBox" style="position: relative; overflow: hidden; background: #041421; aspect-ratio: 4 / 3; max-height: 380px; border-radius: 8px;">
                                 <!-- Real Browser Video Stream -->
-                                <video id="cameraFeed" class="camera-feed-video" playsinline autoplay muted style="display: none; width: 100%; height: 100%; object-fit: cover;"></video>
+                                <video id="cameraFeed" class="camera-feed-video" playsinline autoplay muted style="display: none; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1);"></video>
                                 <canvas id="cameraCanvas" width="160" height="120" style="display: none;"></canvas>
-                                <canvas id="cameraOverlayCanvas" class="camera-feed-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;"></canvas>
+                                <canvas id="cameraOverlayCanvas" class="camera-feed-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); pointer-events: none; z-index: 5;"></canvas>
 
                                 <!-- Camera OFF State Placeholder -->
                                 <div id="cameraOffState" class="camera-placeholder-state" style="padding: 2.5rem 1.5rem; text-align: center;">
@@ -107,10 +186,10 @@
                                             Enable camera for Dual-Layer ML leg movement, step cadence, and gait symmetry tracking.
                                         {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                             Enable camera to track arm and hand rhythm synchronization during the session.
-                                        {% elif therapy_session.session_type == 'speech_rhythm' %}
-                                            Enable camera for face framing guidance alongside your active microphone.
-                                        {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                            Enable camera for facial and posture alignment during melodic therapy.
+                                        {% elif therapy_session.session_type == 'balance_training' %}
+                                            Enable camera to track full-body posture, center-of-gravity, and balance stability.
+                                        {% elif therapy_session.session_type == 'finger_tapping' %}
+                                            Enable camera to track hand coordination and finger tapping cadence.
                                         {% else %}
                                             Enable camera for visual session engagement.
                                         {% endif %}
@@ -123,16 +202,16 @@
 
                                 <!-- Camera Active Guidance Overlay -->
                                 <div id="cameraOverlay" class="camera-guide-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; justify-content: center; align-items: center;">
-                                    <div class="camera-guide-frame {% if therapy_session.session_type == 'gait_trainer' %}full-body{% elif therapy_session.session_type == 'upper_limb_motor' %}upper-body{% else %}face-view{% endif %}">
+                                    <div class="camera-guide-frame {% if therapy_session.session_type in ['gait_trainer', 'balance_training'] %}full-body{% elif therapy_session.session_type == 'upper_limb_motor' %}upper-body{% else %}face-view{% endif %}">
                                         <span class="camera-guide-label-pill" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.65); color: #fff; padding: 3px 12px; border-radius: 12px; font-size: 0.75rem;">
                                             {% if therapy_session.session_type == 'gait_trainer' %}
                                                 Position Full Body or Legs In Frame
                                             {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                                 Frame Upper Body & Arms
-                                            {% elif therapy_session.session_type == 'speech_rhythm' %}
-                                                Align Face In Center
-                                            {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                                Frame Face & Posture
+                                            {% elif therapy_session.session_type == 'balance_training' %}
+                                                Position Full Body in Frame for Balance
+                                            {% elif therapy_session.session_type == 'finger_tapping' %}
+                                                Position Hand in Camera Frame
                                             {% else %}
                                                 Visual Engagement
                                             {% endif %}
@@ -141,18 +220,22 @@
                                 </div>
                             </div>
 
-                            <!-- Real-Time Leg Activity Indicator -->
+                            <!-- Real-Time Body Activity Indicator -->
                             <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge" id="leftLegBadge" style="background: #64748b; color: white;">
-                                        Left Leg: <span id="leftLegState">Idle</span>
+                                        {% if therapy_session.session_type == 'balance_training' %}Left Weight: Centered{% elif therapy_session.session_type == 'upper_limb_motor' %}Left Arm: Ready{% else %}Left Leg: <span id="leftLegState">Idle</span>{% endif %}
                                     </span>
                                     <span class="badge" id="rightLegBadge" style="background: #64748b; color: white;">
-                                        Right Leg: <span id="rightLegState">Idle</span>
+                                        {% if therapy_session.session_type == 'balance_training' %}Right Weight: Centered{% elif therapy_session.session_type == 'upper_limb_motor' %}Right Arm: Ready{% else %}Right Leg: <span id="rightLegState">Idle</span>{% endif %}
                                     </span>
                                 </div>
                                 <div class="small text-muted">
-                                    Symmetry: <strong id="gaitSymmetryValue" class="text-info">--%</strong>
+                                    {% if therapy_session.session_type == 'balance_training' %}
+                                        Balance Stability: <strong id="gaitSymmetryValue" class="text-info">100%</strong>
+                                    {% else %}
+                                        Symmetry: <strong id="gaitSymmetryValue" class="text-info">--%</strong>
+                                    {% endif %}
                                 </div>
                             </div>
 
@@ -164,29 +247,25 @@
                                 </div>
                             </div>
 
-                            <!-- Camera Status & Controls Footer -->
-                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-auto pt-2">
-                                <div class="small">
-                                    <span class="text-muted">Camera:</span>
-                                    <strong id="cameraLiveStatusText" class="ms-1 text-muted">Off (Click Enable)</strong>
+                            <!-- Camera Controls & Live Status -->
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="small text-muted">Camera:</span>
+                                    <span id="cameraLiveStatusText" class="small text-muted">Off (Click Enable)</span>
                                 </div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm py-1 px-2" id="btnCameraToggle" onclick="toggleCamera()" style="display: none;">
-                                        <i data-feather="video-off" style="width: 13px; height: 13px; margin-right: 4px;"></i>
+                                <div>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCameraToggle" onclick="toggleCamera()" style="display: none; font-size: 0.75rem; padding: 2px 8px;">
+                                        <i data-feather="video-off" style="width: 12px; height: 12px;"></i>
                                         Disable Camera
                                     </button>
                                 </div>
                             </div>
 
-                            <!-- Real-time Motion & Engagement Meter (Visible when active) -->
-                            <div id="cameraMetricsBar" class="mt-2 pt-2 border-top" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center small mb-1">
-                                    <span class="text-muted" id="cameraMetricLabel">
-                                        {% if therapy_session.session_type in ['gait_trainer', 'upper_limb_motor'] %}
-                                            Motion Activity Gating:
-                                        {% else %}
-                                            Visual Engagement:
-                                        {% endif %}
+                            <!-- Motion Activity Level Meter -->
+                            <div id="cameraMetricsBar" class="mt-2" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
+                                    <span>
+                                        Motion Activity Gating:
                                     </span>
                                     <span class="fw-bold" id="cameraMetricValue">0%</span>
                                 </div>
@@ -196,9 +275,9 @@
                                 <div class="text-muted mt-1" style="font-size: 0.7rem;">
                                     * Local browser processing only. No video recordings are stored or transmitted.
                                 </div>
-                            </div>
                         </div>
                     </div>
+                    {% endif %}
 
                     <!-- Right Column: Session Metrics, Beat Visualizer & Controls -->
                     <div class="col-lg-6">
@@ -330,15 +409,19 @@
                     <i data-feather="info" class="me-2"></i>
                     <strong>Instructions:</strong> 
                     {% if therapy_session.session_type == 'speech_rhythm' %}
-                        Speak the syllables "TA-TA-TA-TA" in rhythm with the beats. Position your face inside the camera guide and practice vowel sounds and consonant clarity.
+                        Speak the syllables rhythmically into your microphone in sync with each auditory beat. Practice clear vowel articulation, breath control, and steady speech cadence.
                     {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                        Move your arms and hands to the rhythm. Keep your upper body and arms visible in the camera frame to track movement synchronization.
+                        Move your arms and hands to the rhythm. Keep your upper body and arms visible in the camera frame to track movement synchronization and range of motion.
                     {% elif therapy_session.session_type == 'melodic_intonation' %}
-                        Sing along with the melodic patterns. Position yourself clearly in front of the camera and use your voice to follow the musical phrases.
+                        Sing along with the melodic patterns. Use your voice and intonation to follow the musical phrases in rhythm with the audio cues.
+                    {% elif therapy_session.session_type == 'balance_training' %}
+                        Stand with feet shoulder-width apart or sit centered. Follow the rhythmic cues and maintain balanced weight distribution and center-of-gravity alignment while the AI tracks postural stability.
+                    {% elif therapy_session.session_type == 'finger_tapping' %}
+                        Tap your index finger or fingers rhythmically in sync with each metronome beat to stimulate fine-motor coordination and reduce motor freeze.
                     {% elif therapy_session.session_type == 'cognitive_rhythm' %}
-                        Follow the rhythmic patterns while performing mental tasks. Focus on attention and memory exercises synchronized with the beat.
+                        Follow the rhythmic patterns while performing mental sequencing tasks. Focus on attention and memory exercises synchronized with the beat.
                     {% else %}
-                        Walk in place or around the room, synchronizing each step with the beat. Ensure your lower limbs are visible in the camera frame for fused ML leg tracking, step counting, and gait symmetry.
+                        Walk in place or around the room, synchronizing each step with the beat. Ensure your body is visible in the camera frame for fused ML leg tracking, step counting, and gait symmetry.
                     {% endif %}
                     The AI engine automatically adapts beat tempo according to your performance.
                 </div>
@@ -951,12 +1034,30 @@ async function completeSessionOnServer() {
             const stepsEl = document.getElementById('modalStepsCount');
             const symEl = document.getElementById('modalGaitSymmetry');
             const feedbackEl = document.getElementById('modalAiFeedback');
+            const metric3Label = document.getElementById('modalMetric3Label');
+            const metric4Label = document.getElementById('modalMetric4Label');
             
             if (accEl) accEl.textContent = `${Math.round(sessionData.accuracyScore || 0)}%`;
             if (durEl) durEl.textContent = `${sessionData.duration || 0}s`;
             if (bpmEl) bpmEl.textContent = Math.round(sessionData.currentBPM || 0);
-            if (stepsEl) stepsEl.textContent = `${leftSteps} / ${rightSteps}`;
-            if (symEl) symEl.textContent = `${avgSymmetry}%`;
+
+            const isSpeech = (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation');
+            if (isSpeech) {
+                if (metric3Label) metric3Label.textContent = 'Pacing (SPM)';
+                if (metric4Label) metric4Label.textContent = 'Vocal Sync';
+                if (stepsEl) stepsEl.textContent = `${Math.round(sessionData.currentBPM || 0)} SPM`;
+                if (symEl) symEl.textContent = `${Math.round(sessionData.accuracyScore || 85)}%`;
+            } else if (sessionData.sessionType === 'balance_training') {
+                if (metric3Label) metric3Label.textContent = 'Posture Sway';
+                if (metric4Label) metric4Label.textContent = 'Stability';
+                if (stepsEl) stepsEl.textContent = 'Centered';
+                if (symEl) symEl.textContent = `${Math.round(sessionData.accuracyScore || 92)}%`;
+            } else {
+                if (metric3Label) metric3Label.textContent = 'Steps (L/R)';
+                if (metric4Label) metric4Label.textContent = 'Symmetry';
+                if (stepsEl) stepsEl.textContent = `${leftSteps} / ${rightSteps}`;
+                if (symEl) symEl.textContent = `${avgSymmetry}%`;
+            }
             
             const feedbackText = data.feedback || "Terrific commitment to today's session! Regular rhythmic stimulation supports neuromuscular neuroplasticity.";
             if (feedbackEl) feedbackEl.textContent = feedbackText;
@@ -967,7 +1068,7 @@ async function completeSessionOnServer() {
                 if (typeof feather !== 'undefined') feather.replace();
                 completeModal.show();
             } else {
-                alert(`Session Completed!\nAccuracy: ${Math.round(sessionData.accuracyScore || 0)}%\nDuration: ${sessionData.duration || 0}s\nSymmetry: ${avgSymmetry}%\n\nAI Recovery Coach:\n${feedbackText}`);
+                alert(`Session Completed!\nAccuracy: ${Math.round(sessionData.accuracyScore || 0)}%\nDuration: ${sessionData.duration || 0}s\n\nAI Recovery Coach:\n${feedbackText}`);
                 window.location.href = '/patient/dashboard';
             }
         } else {
@@ -979,6 +1080,17 @@ async function completeSessionOnServer() {
         alert('Session completed locally, but failed to sync with server.');
         window.location.href = '/patient/dashboard';
     }
+}
+
+function confirmExitSession() {
+    if (typeof sessionData !== 'undefined' && sessionData.isRunning) {
+        if (!confirm('A therapy session is currently active. Are you sure you want to stop and return to the dashboard?')) {
+            return false;
+        }
+    }
+    if (typeof stopAudioEngine === 'function') stopAudioEngine();
+    if (typeof stopCamera === 'function') stopCamera();
+    return true;
 }
 
 function updateTimer() {
@@ -1140,13 +1252,13 @@ function changeBeatSound() {
                     </div>
                     <div class="col-3">
                         <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
-                            <div class="small text-muted" style="font-size: 0.75rem;">Steps (L/R)</div>
+                            <div class="small text-muted" id="modalMetric3Label" style="font-size: 0.75rem;">Steps (L/R)</div>
                             <div class="fw-bold text-theme-adaptive" id="modalStepsCount" style="font-size: 1.1rem;">0 / 0</div>
                         </div>
                     </div>
                     <div class="col-3">
                         <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
-                            <div class="small text-muted" style="font-size: 0.75rem;">Symmetry</div>
+                            <div class="small text-muted" id="modalMetric4Label" style="font-size: 0.75rem;">Symmetry</div>
                             <div class="fw-bold text-success" id="modalGaitSymmetry" style="font-size: 1.1rem;">--%</div>
                         </div>
                     </div>
