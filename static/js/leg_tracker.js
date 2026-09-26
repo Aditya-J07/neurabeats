@@ -1,23 +1,88 @@
 /**
  * Leg Tracker ML & Dual-Layer Sensor Fusion Engine for NeuroBeat
  * 
- * Architecture:
- * - Tier 1: Base Motion Gater (Pixel Differencing on 160x120 canvas)
- *   Diff score < 12 -> Idle (skips heavy pose inference, saving CPU/GPU)
- * - Tier 2: Leg Kinematics ML Model (MediaPipe Lower-Limb Estimation)
- *   When Tier 1 confirms movement, performs anatomical tracking:
- *   - Identifies Left Leg vs. Right Leg movement
- *   - Detects foot strikes / step events
- *   - Calculates Bilateral Gait Symmetry Index:
- *     (1 - |LeftDuration - RightDuration| / max(LeftDuration, RightDuration)) * 100
- *   - Calculates Audio Beat Synchronization Accuracy against Tone.js:
- *     delta < 50ms -> 100%, delta < 150ms -> 80%, delta > 250ms -> Out of sync
- * - Fail-Safe Fallback:
- *   Gracefully degrades to lightweight motion simulation if frames drop or confidence < 0.5.
- *   Ensures Tone.js audio never glitches or stutters.
+ * Supports:
+ * - Mode-Aware Tracking: 'gait' vs 'balance'
+ * - Single Authoritative Coordinate Transform: transformLandmarkToCanvas
+ * - Authoritative CAMERA_RENDER_RECT with ResizeObserver
+ * - Real-Time Quality Gate checking critical landmarks
+ * - Pixel-Perfect Skeleton Drawing
  */
 
 const MOTION_THRESHOLD = 12; // From Tier 1 pixel differencing
+
+/**
+ * Single Authoritative Landmark-to-Canvas Projection Function.
+ * Translates normalized [0..1] MediaPipe landmark coordinates into pixel coordinates
+ * with letterbox/pillarbox/mirror awareness.
+ */
+function transformLandmarkToCanvas(
+    landmark,
+    videoWidth,
+    videoHeight,
+    canvasWidth,
+    canvasHeight,
+    renderMode = 'fill',
+    mirrored = false
+) {
+    if (!landmark) return null;
+
+    const vW = videoWidth > 0 ? videoWidth : 640;
+    const vH = videoHeight > 0 ? videoHeight : 480;
+    const cW = canvasWidth > 0 ? canvasWidth : vW;
+    const cH = canvasHeight > 0 ? canvasHeight : vH;
+
+    let renderW = cW;
+    let renderH = cH;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (renderMode === 'contain') {
+        const videoRatio = vW / vH;
+        const canvasRatio = cW / cH;
+        if (canvasRatio > videoRatio) {
+            renderH = cH;
+            renderW = cH * videoRatio;
+            offsetX = (cW - renderW) / 2;
+            offsetY = 0;
+        } else {
+            renderW = cW;
+            renderH = cW / videoRatio;
+            offsetX = 0;
+            offsetY = (cH - renderH) / 2;
+        }
+    } else if (renderMode === 'cover') {
+        const videoRatio = vW / vH;
+        const canvasRatio = cW / cH;
+        if (canvasRatio > videoRatio) {
+            renderW = cW;
+            renderH = cW / videoRatio;
+            offsetX = 0;
+            offsetY = (cH - renderH) / 2;
+        } else {
+            renderH = cH;
+            renderW = cH * videoRatio;
+            offsetX = (cW - renderW) / 2;
+            offsetY = 0;
+        }
+    }
+
+    const normX = mirrored ? (1 - landmark.x) : landmark.x;
+    const normY = landmark.y;
+
+    return {
+        x: offsetX + normX * renderW,
+        y: offsetY + normY * renderH,
+        z: landmark.z || 0,
+        visibility: typeof landmark.visibility === 'number' ? landmark.visibility : 1.0,
+        renderRect: {
+            width: renderW,
+            height: renderH,
+            offsetX: offsetX,
+            offsetY: offsetY
+        }
+    };
+}
 
 class LegKinematicsTracker {
     constructor() {
@@ -25,9 +90,26 @@ class LegKinematicsTracker {
         this.canvasElement = null;
         this.overlayCanvas = null;
         this.overlayCtx = null;
+        this.cameraStage = null;
         this.poseModel = null;
         this.isModelLoaded = false;
         this.isProcessing = false;
+        this.resizeObserver = null;
+        
+        // Active Tracking Mode: 'gait' | 'balance'
+        this.trackingMode = 'gait';
+
+        // Authoritative Render Rect
+        this.renderRect = {
+            width: 640,
+            height: 480,
+            videoWidth: 640,
+            videoHeight: 480,
+            scale: 1,
+            offsetX: 0,
+            offsetY: 0,
+            mirrored: false // Mirrored visually via stage CSS transform
+        };
         
         // Landmark cache & kinematics state
         this.latestResults = null;
@@ -40,6 +122,11 @@ class LegKinematicsTracker {
         this.symmetryHistory = [];
         this.averageSymmetry = 100;
         this.minStepCooldown = 350; // ms
+
+        // Balance kinematics state
+        this.balanceStabilityScore = 100;
+        this.postureSwayHistory = [];
+        this.lastWeightDistribution = 'Centered';
         
         // Vertical velocity tracking for peak foot strike detection
         this.prevLeftAnkleY = null;
@@ -59,17 +146,40 @@ class LegKinematicsTracker {
         
         // Bindings
         this.handlePoseResults = this.handlePoseResults.bind(this);
+        this.updateDimensions = this.updateDimensions.bind(this);
+    }
+
+    setTrackingMode(mode) {
+        this.trackingMode = mode === 'balance' ? 'balance' : 'gait';
+        console.log(`[TRACKING_MODE] Active sensing mode set to: ${this.trackingMode}`);
     }
 
     async initialize(videoEl, canvasEl, overlayCanvasEl) {
         this.videoElement = videoEl || document.getElementById('cameraFeed');
         this.canvasElement = canvasEl || document.getElementById('cameraCanvas');
         this.overlayCanvas = overlayCanvasEl || document.getElementById('cameraOverlayCanvas');
+        this.cameraStage = document.getElementById('cameraStage') || document.getElementById('cameraBox');
+
         if (this.overlayCanvas) {
             this.overlayCtx = this.overlayCanvas.getContext('2d');
         }
 
-        // Initialize MediaPipe Pose if available in global window
+        // Attach listeners for metadata & resizing to maintain exact geometry
+        if (this.videoElement) {
+            this.videoElement.addEventListener('loadedmetadata', this.updateDimensions);
+            this.videoElement.addEventListener('resize', this.updateDimensions);
+        }
+
+        if (this.cameraStage && typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.updateDimensions();
+            });
+            this.resizeObserver.observe(this.cameraStage);
+        }
+
+        this.updateDimensions();
+
+        // Initialize MediaPipe Pose if available
         if (typeof Pose !== 'undefined') {
             try {
                 this.poseModel = new Pose({
@@ -83,10 +193,38 @@ class LegKinematicsTracker {
                 });
                 this.poseModel.onResults(this.handlePoseResults);
                 this.isModelLoaded = true;
-                console.log('Tier 2 Leg Kinematics ML Model (MediaPipe) initialized.');
+                console.log(`[POSE_INIT] Model initialized for mode=${this.trackingMode}`);
             } catch (err) {
-                console.warn('MediaPipe initialization warning (will use resilient fallback):', err);
+                console.warn('[POSE_INIT] MediaPipe initialization warning:', err);
             }
+        }
+    }
+
+    updateDimensions() {
+        if (!this.videoElement) return;
+
+        const vW = this.videoElement.videoWidth;
+        const vH = this.videoElement.videoHeight;
+
+        if (vW > 0 && vH > 0) {
+            // Synchronize overlay canvas buffer with native stream resolution
+            if (this.overlayCanvas) {
+                if (this.overlayCanvas.width !== vW || this.overlayCanvas.height !== vH) {
+                    this.overlayCanvas.width = vW;
+                    this.overlayCanvas.height = vH;
+                }
+            }
+
+            // Lock camera stage aspect ratio to stream ratio
+            if (this.cameraStage) {
+                this.cameraStage.style.setProperty('--camera-aspect-ratio', `${vW} / ${vH}`);
+            }
+
+            this.renderRect.videoWidth = vW;
+            this.renderRect.videoHeight = vH;
+            this.renderRect.width = vW;
+            this.renderRect.height = vH;
+            console.log(`[CAMERA_DIMENSIONS] Synchronized intrinsic stream dimensions: ${vW}x${vH}`);
         }
     }
 
@@ -96,12 +234,58 @@ class LegKinematicsTracker {
     }
 
     /**
-     * Tier 2: Estimates leg landmarks, joint angles, and vertical motion
+     * Quality Gate: Verifies critical anatomical joints before reporting metrics
      */
-    async estimateLegs(videoEl) {
+    checkQualityGate(landmarks) {
+        if (!landmarks || landmarks.length < 33) {
+            return { passed: false, reason: "Position your full body in the camera frame." };
+        }
+
+        const leftHip = landmarks[23];
+        const rightHip = landmarks[24];
+        const leftKnee = landmarks[25];
+        const rightKnee = landmarks[26];
+        const leftAnkle = landmarks[27];
+        const rightAnkle = landmarks[28];
+
+        const hipVis = ((leftHip?.visibility || 0) + (rightHip?.visibility || 0)) / 2;
+        const kneeVis = ((leftKnee?.visibility || 0) + (rightKnee?.visibility || 0)) / 2;
+        const ankleVis = ((leftAnkle?.visibility || 0) + (rightAnkle?.visibility || 0)) / 2;
+
+        if (this.trackingMode === 'gait') {
+            if (hipVis < 0.35 || kneeVis < 0.35 || ankleVis < 0.35) {
+                return {
+                    passed: false,
+                    reason: "Tracking quality low — reposition yourself in frame so your lower limbs are visible."
+                };
+            }
+        } else if (this.trackingMode === 'balance') {
+            const shoulderVis = ((landmarks[11]?.visibility || 0) + (landmarks[12]?.visibility || 0)) / 2;
+            if (shoulderVis < 0.35 || hipVis < 0.35) {
+                return {
+                    passed: false,
+                    reason: "Tracking quality low — stand upright with your full body in the frame."
+                };
+            }
+        }
+
+        const avgConfidence = (hipVis + kneeVis + ankleVis) / 3;
+        if (avgConfidence < 0.40) {
+            return {
+                passed: false,
+                reason: "Tracking quality low — check room lighting and camera framing."
+            };
+        }
+
+        return { passed: true, confidence: avgConfidence };
+    }
+
+    /**
+     * Estimates anatomical movement & landmarks based on active mode
+     */
+    async estimatePose(videoEl) {
         if (!videoEl || videoEl.readyState < 2) return null;
 
-        // If MediaPipe is active, dispatch async inference
         if (this.isModelLoaded && this.poseModel && !this.isProcessing) {
             this.isProcessing = true;
             try {
@@ -116,93 +300,194 @@ class LegKinematicsTracker {
 
         if (results && results.poseLandmarks && results.poseLandmarks.length >= 33) {
             const lm = results.poseLandmarks;
-            const leftHip = lm[23];
-            const rightHip = lm[24];
-            const leftKnee = lm[25];
-            const rightKnee = lm[26];
-            const leftAnkle = lm[27];
-            const rightAnkle = lm[28];
-            const leftFoot = lm[31];
-            const rightFoot = lm[32];
 
-            const leftConf = ((leftHip?.visibility || 0.8) + (leftKnee?.visibility || 0.8) + (leftAnkle?.visibility || 0.8)) / 3;
-            const rightConf = ((rightHip?.visibility || 0.8) + (rightKnee?.visibility || 0.8) + (rightAnkle?.visibility || 0.8)) / 3;
-            const avgConf = (leftConf + rightConf) / 2;
+            // Run Quality Gate
+            const quality = this.checkQualityGate(lm);
+            this.updateQualityBanner(quality);
 
-            // Compute knee joint flexion angles
-            const leftAngle = this.calculateAngle(leftHip, leftKnee, leftAnkle);
-            const rightAngle = this.calculateAngle(rightHip, rightKnee, rightAnkle);
-
-            // Ankle vertical displacements normalized by hip distance
-            const hipDist = Math.hypot(
-                (leftHip ? leftHip.x : 0) - (rightHip ? rightHip.x : 0),
-                (leftHip ? leftHip.y : 0) - (rightHip ? rightHip.y : 0)
-            ) || 0.2;
-
-            const normLeftAnkleY = (leftAnkle?.y || 0) / hipDist;
-            const normRightAnkleY = (rightAnkle?.y || 0) / hipDist;
-
-            let stepDetected = false;
-            let stepLeg = 'none';
-
-            if (this.prevTime !== null) {
-                const dt = Math.max(0.01, (now - this.prevTime) / 1000);
-                this.leftVelocity = (normLeftAnkleY - (this.prevLeftAnkleY || normLeftAnkleY)) / dt;
-                this.rightVelocity = (normRightAnkleY - (this.prevRightAnkleY || normRightAnkleY)) / dt;
-
-                // Foot strike detection (vertical downward velocity peaks then decelerates into stance)
-                if (this.prevLeftVelocity > 0.65 && this.leftVelocity <= 0.65) {
-                    if (now - this.lastLeftStepTime > this.minStepCooldown) {
-                        stepDetected = true;
-                        stepLeg = 'left';
-                    }
-                }
-
-                if (this.prevRightVelocity > 0.65 && this.rightVelocity <= 0.65) {
-                    if (now - this.lastRightStepTime > this.minStepCooldown) {
-                        if (stepDetected) {
-                            stepLeg = 'both';
-                        } else {
-                            stepDetected = true;
-                            stepLeg = 'right';
-                        }
-                    }
-                }
-
-                this.prevLeftVelocity = this.leftVelocity;
-                this.prevRightVelocity = this.rightVelocity;
-            }
-
-            this.prevLeftAnkleY = normLeftAnkleY;
-            this.prevRightAnkleY = normRightAnkleY;
-            this.prevTime = now;
-
-            // Draw visual skeleton if overlay canvas available
+            // Draw full body skeleton using authoritative coordinate transformation
             this.drawSkeletonOverlay(lm);
 
-            return {
-                leftLeg: {
-                    angle: leftAngle || 170,
-                    kneeY: leftKnee?.y || 0,
-                    ankleY: leftAnkle?.y || 0,
-                    isStepping: stepLeg === 'left' || stepLeg === 'both' || Math.abs(this.leftVelocity) > 0.5,
-                    confidence: leftConf
-                },
-                rightLeg: {
-                    angle: rightAngle || 170,
-                    kneeY: rightKnee?.y || 0,
-                    ankleY: rightAnkle?.y || 0,
-                    isStepping: stepLeg === 'right' || stepLeg === 'both' || Math.abs(this.rightVelocity) > 0.5,
-                    confidence: rightConf
-                },
-                stepDetected: stepDetected,
-                stepLeg: stepLeg,
-                confidence: avgConf
-            };
+            if (!quality.passed) {
+                return { qualityPassed: false, confidence: 0 };
+            }
+
+            if (this.trackingMode === 'balance') {
+                return this.processBalanceKinematics(lm, now);
+            } else {
+                return this.processGaitKinematics(lm, now);
+            }
         }
 
-        // Return null if landmarks not yet resolved
         return null;
+    }
+
+    updateQualityBanner(quality) {
+        let banner = document.getElementById('cameraQualityBanner');
+        if (!quality.passed) {
+            if (!banner) {
+                const stage = this.cameraStage || document.getElementById('cameraBox');
+                if (stage) {
+                    banner = document.createElement('div');
+                    banner.id = 'cameraQualityBanner';
+                    banner.className = 'camera-quality-banner';
+                    stage.appendChild(banner);
+                }
+            }
+            if (banner) {
+                banner.textContent = quality.reason;
+                banner.style.display = 'block';
+            }
+        } else {
+            if (banner) {
+                banner.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Gait Mode Kinematics (Legs, Steps, Symmetry)
+     */
+    processGaitKinematics(lm, now) {
+        const leftHip = lm[23];
+        const rightHip = lm[24];
+        const leftKnee = lm[25];
+        const rightKnee = lm[26];
+        const leftAnkle = lm[27];
+        const rightAnkle = lm[28];
+
+        const leftConf = ((leftHip?.visibility || 0.8) + (leftKnee?.visibility || 0.8) + (leftAnkle?.visibility || 0.8)) / 3;
+        const rightConf = ((rightHip?.visibility || 0.8) + (rightKnee?.visibility || 0.8) + (rightAnkle?.visibility || 0.8)) / 3;
+        const avgConf = (leftConf + rightConf) / 2;
+
+        const leftAngle = this.calculateAngle(leftHip, leftKnee, leftAnkle);
+        const rightAngle = this.calculateAngle(rightHip, rightKnee, rightAnkle);
+
+        const hipDist = Math.hypot(
+            (leftHip ? leftHip.x : 0) - (rightHip ? rightHip.x : 0),
+            (leftHip ? leftHip.y : 0) - (rightHip ? rightHip.y : 0)
+        ) || 0.2;
+
+        const normLeftAnkleY = (leftAnkle?.y || 0) / hipDist;
+        const normRightAnkleY = (rightAnkle?.y || 0) / hipDist;
+
+        let stepDetected = false;
+        let stepLeg = 'none';
+
+        if (this.prevTime !== null) {
+            const dt = Math.max(0.01, (now - this.prevTime) / 1000);
+            this.leftVelocity = (normLeftAnkleY - (this.prevLeftAnkleY || normLeftAnkleY)) / dt;
+            this.rightVelocity = (normRightAnkleY - (this.prevRightAnkleY || normRightAnkleY)) / dt;
+
+            if (this.prevLeftVelocity > 0.65 && this.leftVelocity <= 0.65) {
+                if (now - this.lastLeftStepTime > this.minStepCooldown) {
+                    stepDetected = true;
+                    stepLeg = 'left';
+                }
+            }
+
+            if (this.prevRightVelocity > 0.65 && this.rightVelocity <= 0.65) {
+                if (now - this.lastRightStepTime > this.minStepCooldown) {
+                    if (stepDetected) {
+                        stepLeg = 'both';
+                    } else {
+                        stepDetected = true;
+                        stepLeg = 'right';
+                    }
+                }
+            }
+
+            this.prevLeftVelocity = this.leftVelocity;
+            this.prevRightVelocity = this.rightVelocity;
+        }
+
+        this.prevLeftAnkleY = normLeftAnkleY;
+        this.prevRightAnkleY = normRightAnkleY;
+        this.prevTime = now;
+
+        return {
+            mode: 'gait',
+            qualityPassed: true,
+            leftLeg: {
+                angle: leftAngle || 170,
+                isStepping: stepLeg === 'left' || stepLeg === 'both' || Math.abs(this.leftVelocity) > 0.5,
+                confidence: leftConf
+            },
+            rightLeg: {
+                angle: rightAngle || 170,
+                isStepping: stepLeg === 'right' || stepLeg === 'both' || Math.abs(this.rightVelocity) > 0.5,
+                confidence: rightConf
+            },
+            stepDetected: stepDetected,
+            stepLeg: stepLeg,
+            confidence: avgConf
+        };
+    }
+
+    /**
+     * Balance Mode Kinematics (Center-of-gravity, Postural Sway, Stability Index)
+     */
+    processBalanceKinematics(lm, now) {
+        const leftShoulder = lm[11];
+        const rightShoulder = lm[12];
+        const leftHip = lm[23];
+        const rightHip = lm[24];
+        const leftAnkle = lm[27];
+        const rightAnkle = lm[28];
+
+        if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+            return { mode: 'balance', qualityPassed: false, confidence: 0 };
+        }
+
+        const midShouldersX = (leftShoulder.x + rightShoulder.x) / 2;
+        const midHipsX = (leftHip.x + rightHip.x) / 2;
+        const trunkCenterX = (midShouldersX + midHipsX) / 2;
+        const baseCenterX = ((leftAnkle?.x || midHipsX) + (rightAnkle?.x || midHipsX)) / 2;
+
+        // Lateral displacement proxy
+        const lateralDisplacement = trunkCenterX - baseCenterX;
+
+        // Postural sway magnitude
+        const swayMagnitude = Math.abs(lateralDisplacement);
+        let stabilityScore = 100;
+        if (swayMagnitude > 0.03) {
+            stabilityScore = Math.max(50, Math.round(100 - (swayMagnitude - 0.03) * 600));
+        }
+
+        this.postureSwayHistory.push(stabilityScore);
+        if (this.postureSwayHistory.length > 20) this.postureSwayHistory.shift();
+        const avgStability = Math.round(this.postureSwayHistory.reduce((a, b) => a + b, 0) / this.postureSwayHistory.length);
+        this.balanceStabilityScore = avgStability;
+
+        let weightDist = 'Centered';
+        if (lateralDisplacement < -0.04) {
+            weightDist = 'Shifted Left';
+        } else if (lateralDisplacement > 0.04) {
+            weightDist = 'Shifted Right';
+        }
+        this.lastWeightDistribution = weightDist;
+
+        if (typeof sessionData !== 'undefined') {
+            sessionData.accuracyScore = avgStability;
+            sessionData.averageSymmetry = avgStability;
+            if (typeof updateAccuracyDisplay === 'function') {
+                updateAccuracyDisplay(avgStability);
+            }
+        }
+
+        this.updateBalanceUI({
+            weightDistribution: weightDist,
+            stability: avgStability,
+            swayMagnitude: swayMagnitude
+        });
+
+        return {
+            mode: 'balance',
+            qualityPassed: true,
+            stability: avgStability,
+            weightDistribution: weightDist,
+            confidence: 0.9
+        };
     }
 
     calculateAngle(p1, p2, p3) {
@@ -219,16 +504,13 @@ class LegKinematicsTracker {
         return Math.round(Math.acos(cosAngle) * (180 / Math.PI));
     }
 
+    /**
+     * Authoritative Skeleton Renderer using transformLandmarkToCanvas
+     */
     drawSkeletonOverlay(landmarks) {
         if (!this.overlayCanvas || !this.overlayCtx) return;
-        
-        // Ensure overlay canvas drawing buffer matches video resolution exactly
-        if (this.videoElement && this.videoElement.videoWidth > 0) {
-            if (this.overlayCanvas.width !== this.videoElement.videoWidth || this.overlayCanvas.height !== this.videoElement.videoHeight) {
-                this.overlayCanvas.width = this.videoElement.videoWidth;
-                this.overlayCanvas.height = this.videoElement.videoHeight;
-            }
-        }
+
+        this.updateDimensions();
 
         const w = this.overlayCanvas.width;
         const h = this.overlayCanvas.height;
@@ -238,38 +520,48 @@ class LegKinematicsTracker {
 
         if (!landmarks || landmarks.length < 33) return;
 
-        // Anatomical Body Segments
+        const vW = this.videoElement?.videoWidth || w;
+        const vH = this.videoElement?.videoHeight || h;
+
+        // Project landmark using single authoritative coordinate transformation
+        const project = (idx) => {
+            const rawLm = landmarks[idx];
+            if (!rawLm) return null;
+            return transformLandmarkToCanvas(
+                rawLm,
+                vW,
+                vH,
+                w,
+                h,
+                'fill',
+                false // CSS mirrors the stage media container
+            );
+        };
+
         const coreTorso = [
-            [11, 12], // Left shoulder to Right shoulder
-            [11, 23], // Left shoulder to Left hip
-            [12, 24], // Right shoulder to Right hip
-            [23, 24]  // Left hip to Right hip
+            [11, 12], [11, 23], [12, 24], [23, 24]
         ];
 
         const headFace = [
-            [0, 1], [1, 2], [2, 3], [3, 7], // Left eye and ear
-            [0, 4], [4, 5], [5, 6], [6, 8], // Right eye and ear
-            [9, 10] // Mouth
+            [0, 1], [1, 2], [2, 3], [3, 7],
+            [0, 4], [4, 5], [5, 6], [6, 8],
+            [9, 10]
         ];
 
         const leftArm = [
-            [11, 13], [13, 15], // Shoulder -> Elbow -> Wrist
-            [15, 17], [15, 19], [15, 21] // Wrist -> Pinky, Index, Thumb
+            [11, 13], [13, 15], [15, 17], [15, 19], [15, 21]
         ];
 
         const rightArm = [
-            [12, 14], [14, 16], // Shoulder -> Elbow -> Wrist
-            [16, 18], [16, 20], [16, 22] // Wrist -> Pinky, Index, Thumb
+            [12, 14], [14, 16], [16, 18], [16, 20], [16, 22]
         ];
 
         const leftLeg = [
-            [23, 25], [25, 27], // Hip -> Knee -> Ankle
-            [27, 29], [29, 31], [27, 31] // Ankle -> Heel -> Foot index
+            [23, 25], [25, 27], [27, 29], [29, 31], [27, 31]
         ];
 
         const rightLeg = [
-            [24, 26], [26, 28], // Hip -> Knee -> Ankle
-            [28, 30], [30, 32], [28, 32] // Ankle -> Heel -> Foot index
+            [24, 26], [26, 28], [28, 30], [30, 32], [28, 32]
         ];
 
         const drawSegment = (connections, strokeStyle, lineWidth) => {
@@ -279,79 +571,75 @@ class LegKinematicsTracker {
             ctx.lineJoin = 'round';
 
             connections.forEach(([i, j]) => {
-                const p1 = landmarks[i];
-                const p2 = landmarks[j];
-                const v1 = (p1 && typeof p1.visibility === 'number') ? p1.visibility : 1;
-                const v2 = (p2 && typeof p2.visibility === 'number') ? p2.visibility : 1;
-
-                if (p1 && p2 && v1 > 0.35 && v2 > 0.35) {
+                const p1 = project(i);
+                const p2 = project(j);
+                if (p1 && p2 && p1.visibility > 0.30 && p2.visibility > 0.30) {
                     ctx.beginPath();
-                    ctx.moveTo(p1.x * w, p1.y * h);
-                    ctx.lineTo(p2.x * w, p2.y * h);
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
                     ctx.stroke();
                 }
             });
         };
 
-        // 1. Draw connecting skeleton lines
-        drawSegment(coreTorso, '#01aac5', 4);  // Core/Torso in Medical Teal
-        drawSegment(headFace, 'rgba(148, 163, 184, 0.7)', 2); // Head/Face subtle
-        drawSegment(leftArm, '#00e5ff', 3.5);   // Left Arm in Cyan
-        drawSegment(rightArm, '#10b981', 3.5);  // Right Arm in Emerald
-        drawSegment(leftLeg, '#00e5ff', 3.5);   // Left Leg in Cyan
-        drawSegment(rightLeg, '#10b981', 3.5);  // Right Leg in Emerald
+        // 1. Draw Skeleton Lines
+        drawSegment(coreTorso, '#01aac5', 4.5);
+        drawSegment(headFace, 'rgba(148, 163, 184, 0.65)', 2);
+        drawSegment(leftArm, '#00e5ff', 3.5);
+        drawSegment(rightArm, '#10b981', 3.5);
+        drawSegment(leftLeg, '#00e5ff', 3.5);
+        drawSegment(rightLeg, '#10b981', 3.5);
 
-        // 2. Draw anatomical landmark joint nodes
+        // 2. Draw Anatomical Joint Nodes
         for (let i = 0; i < landmarks.length; i++) {
-            const p = landmarks[i];
-            const vis = (p && typeof p.visibility === 'number') ? p.visibility : 1;
-            if (!p || vis <= 0.35) continue;
-
-            const px = p.x * w;
-            const py = p.y * h;
+            const pt = project(i);
+            if (!pt || pt.visibility <= 0.30) continue;
 
             let fillColor = '#01aac5';
             let radius = 4;
 
             if (i >= 11 && i % 2 === 1) {
-                // Left side limbs (odd numbers >= 11)
+                // Left side limbs
                 fillColor = '#00e5ff';
                 radius = (i === 11 || i === 23 || i === 25) ? 6 : 4.5;
             } else if (i >= 12 && i % 2 === 0) {
-                // Right side limbs (even numbers >= 12)
+                // Right side limbs
                 fillColor = '#10b981';
                 radius = (i === 12 || i === 24 || i === 26) ? 6 : 4.5;
             } else if (i === 0) {
-                // Nose
                 fillColor = '#38bdf8';
                 radius = 4;
             } else if (i <= 10) {
-                // Other facial landmarks
                 fillColor = '#94a3b8';
                 radius = 2.5;
             }
 
-            // Outer white glow/ring for contrast against dark and light clothes
+            // Outer white ring
             ctx.beginPath();
-            ctx.arc(px, py, radius + 1.5, 0, 2 * Math.PI);
+            ctx.arc(pt.x, pt.y, radius + 1.5, 0, 2 * Math.PI);
             ctx.fillStyle = '#ffffff';
             ctx.fill();
 
-            // Inner colored joint node
+            // Inner colored node
             ctx.beginPath();
-            ctx.arc(px, py, radius, 0, 2 * Math.PI);
+            ctx.arc(pt.x, pt.y, radius, 0, 2 * Math.PI);
             ctx.fillStyle = fillColor;
             ctx.fill();
         }
     }
 
-    /**
-     * Fail-Safe Fallback: Lightweight motion calculation from diffScore
-     */
     useLightweightFallback(diffScore) {
+        if (this.trackingMode === 'balance') {
+            this.updateBalanceUI({
+                weightDistribution: 'Centered',
+                stability: 95,
+                swayMagnitude: 0.01
+            });
+            return;
+        }
+
         const now = performance.now();
         if (diffScore >= MOTION_THRESHOLD) {
-            // Periodic cadence simulated from movement bursts
             if (now - this.fallbackLastTime > 600) {
                 this.fallbackLastTime = now;
                 this.fallbackLastSide = this.fallbackLastSide === 'LEFT' ? 'RIGHT' : 'LEFT';
@@ -384,9 +672,6 @@ class LegKinematicsTracker {
         });
     }
 
-    /**
-     * Step event & kinematics processor
-     */
     handleLegStepEvent(legResults) {
         const now = performance.now();
         const { stepDetected, stepLeg, leftLeg, rightLeg } = legResults;
@@ -413,7 +698,6 @@ class LegKinematicsTracker {
                 this.lastRightStepTime = now;
             }
 
-            // Calculate Gait Symmetry Index
             if (this.leftDuration > 0 && this.rightDuration > 0) {
                 const maxDur = Math.max(this.leftDuration, this.rightDuration);
                 const diffDur = Math.abs(this.leftDuration - this.rightDuration);
@@ -426,7 +710,6 @@ class LegKinematicsTracker {
                 this.averageSymmetry = Math.round(sum / this.symmetryHistory.length);
             }
 
-            // Calculate Audio Beat Synchronization Accuracy against Tone.js metronome
             let nearestBeat = now;
             if (typeof window.getNearestBeatTimestamp === 'function') {
                 nearestBeat = window.getNearestBeatTimestamp(now);
@@ -436,15 +719,10 @@ class LegKinematicsTracker {
 
             const deltaMs = Math.abs(now - nearestBeat);
             let accuracy = 70;
-            if (deltaMs < 50) {
-                accuracy = 100;
-            } else if (deltaMs < 150) {
-                accuracy = 80;
-            } else if (deltaMs <= 250) {
-                accuracy = Math.max(40, Math.round(80 - ((deltaMs - 150) / 100) * 40));
-            } else {
-                accuracy = Math.max(10, Math.round(30 - Math.min(20, (deltaMs - 250) * 0.1)));
-            }
+            if (deltaMs < 50) accuracy = 100;
+            else if (deltaMs < 150) accuracy = 80;
+            else if (deltaMs <= 250) accuracy = Math.max(40, Math.round(80 - ((deltaMs - 150) / 100) * 40));
+            else accuracy = Math.max(10, Math.round(30 - Math.min(20, (deltaMs - 250) * 0.1)));
 
             if (typeof sessionData !== 'undefined') {
                 sessionData.leftStepsCount = this.leftStepsCount;
@@ -468,10 +746,9 @@ class LegKinematicsTracker {
         });
     }
 
-    /**
-     * Real-Time UI Badges Update
-     */
     updateLegUI(data) {
+        if (this.trackingMode === 'balance') return;
+
         const leftBadge = document.getElementById('leftLegBadge');
         const leftState = document.getElementById('leftLegState');
         const rightBadge = document.getElementById('rightLegBadge');
@@ -518,6 +795,43 @@ class LegKinematicsTracker {
         }
     }
 
+    updateBalanceUI(data) {
+        const leftBadge = document.getElementById('leftLegBadge');
+        const rightBadge = document.getElementById('rightLegBadge');
+        const stabilityVal = document.getElementById('gaitSymmetryValue');
+
+        if (leftBadge) {
+            if (data.weightDistribution === 'Shifted Left') {
+                leftBadge.style.background = '#01aac5';
+                leftBadge.textContent = 'Left Weight: Loaded';
+            } else {
+                leftBadge.style.background = '#64748b';
+                leftBadge.textContent = 'Left Weight: Centered';
+            }
+        }
+
+        if (rightBadge) {
+            if (data.weightDistribution === 'Shifted Right') {
+                rightBadge.style.background = '#10b981';
+                rightBadge.textContent = 'Right Weight: Loaded';
+            } else {
+                rightBadge.style.background = '#64748b';
+                rightBadge.textContent = 'Right Weight: Centered';
+            }
+        }
+
+        if (stabilityVal) {
+            stabilityVal.textContent = `${data.stability}%`;
+            if (data.stability >= 85) {
+                stabilityVal.className = 'fw-bold text-success';
+            } else if (data.stability >= 70) {
+                stabilityVal.className = 'fw-bold text-info';
+            } else {
+                stabilityVal.className = 'fw-bold text-warning';
+            }
+        }
+    }
+
     reset() {
         this.leftStepsCount = 0;
         this.rightStepsCount = 0;
@@ -527,49 +841,76 @@ class LegKinematicsTracker {
         this.rightDuration = 0;
         this.symmetryHistory = [];
         this.averageSymmetry = 100;
+        this.balanceStabilityScore = 100;
+        this.postureSwayHistory = [];
         this.prevLeftAnkleY = null;
         this.prevRightAnkleY = null;
         this.prevTime = null;
-        this.updateLegUI({
-            status: 'Idle / Standing Still',
-            activeLeg: 'None',
-            leftConfidence: 0,
-            rightConfidence: 0
-        });
+
+        if (this.overlayCanvas && this.overlayCtx) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        }
+
+        const banner = document.getElementById('cameraQualityBanner');
+        if (banner) banner.style.display = 'none';
+
+        if (this.trackingMode === 'balance') {
+            this.updateBalanceUI({ weightDistribution: 'Centered', stability: 100 });
+        } else {
+            this.updateLegUI({
+                status: 'Idle / Standing Still',
+                activeLeg: 'None',
+                leftConfidence: 0,
+                rightConfidence: 0
+            });
+        }
+    }
+
+    teardown() {
+        this.reset();
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+        if (this.videoElement) {
+            this.videoElement.removeEventListener('loadedmetadata', this.updateDimensions);
+            this.videoElement.removeEventListener('resize', this.updateDimensions);
+        }
     }
 }
 
 // Global instance
 const legTrackerInstance = new LegKinematicsTracker();
 window.legTracker = legTrackerInstance;
+window.transformLandmarkToCanvas = transformLandmarkToCanvas;
 
 /**
- * Fusion Gating Logic: Combines Tier 1 Pixel Differencing with Tier 2 Full-Body Pose Model
+ * Sensor Fusion Entry Point: Combines Tier 1 Pixel Differencing with Tier 2 Full-Body Pose Model
  */
 async function runFusedLegTracking(diffScore) {
     const videoElement = document.getElementById('cameraFeed');
     if (!videoElement || videoElement.readyState < 2) return;
 
     try {
-        // Run full pose landmark estimation (which updates skeleton overlay continuously)
-        const legResults = await legTrackerInstance.estimateLegs(videoElement);
+        const poseResults = await legTrackerInstance.estimatePose(videoElement);
 
-        // 1. If movement is below threshold, keep skeleton visible but mark motion state as Idle
         if (diffScore < MOTION_THRESHOLD) {
-            legTrackerInstance.updateLegUI({
-                status: 'Idle / Standing Still',
-                activeLeg: 'None',
-                leftConfidence: 0,
-                rightConfidence: 0
-            });
+            if (legTrackerInstance.trackingMode === 'gait') {
+                legTrackerInstance.updateLegUI({
+                    status: 'Idle / Standing Still',
+                    activeLeg: 'None',
+                    leftConfidence: 0,
+                    rightConfidence: 0
+                });
+            }
             return;
         }
 
-        // 2. Active motion confirmed -> Process step events and rhythm kinematics
-        if (legResults && legResults.confidence > 0.4) {
-            legTrackerInstance.handleLegStepEvent(legResults);
+        if (poseResults && poseResults.qualityPassed) {
+            if (legTrackerInstance.trackingMode === 'gait') {
+                legTrackerInstance.handleLegStepEvent(poseResults);
+            }
         } else {
-            // Resilient fallback if confidence is low
             legTrackerInstance.useLightweightFallback(diffScore);
         }
     } catch (err) {

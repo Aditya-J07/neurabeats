@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Therapy Session - NeuroBeat{% endblock %}
+{% block title %}{{ mode_config.title }} - NeuroBeat{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -14,61 +14,32 @@
                         </a>
                         <div>
                             <h4 class="card-title mb-1">
-                                {% if therapy_session.session_type == 'speech_rhythm' %}
-                                    <i data-feather="mic" class="me-2" style="color: #01aac5;"></i>
-                                    Speech Rhythm Session
-                                {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                    <i data-feather="activity" class="me-2" style="color: #01aac5;"></i>
-                                    Upper Limb Motor Session
-                                {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                    <i data-feather="music" class="me-2" style="color: #01aac5;"></i>
-                                    Melodic Intonation Therapy
-                                {% elif therapy_session.session_type == 'balance_training' %}
-                                    <i data-feather="target" class="me-2" style="color: #01aac5;"></i>
-                                    Balance Training Session
-                                {% elif therapy_session.session_type == 'finger_tapping' %}
-                                    <i data-feather="check-circle" class="me-2" style="color: #01aac5;"></i>
-                                    Finger Tapping Session
-                                {% elif therapy_session.session_type == 'cognitive_rhythm' %}
-                                    <i data-feather="zap" class="me-2" style="color: #01aac5;"></i>
-                                    Cognitive Rhythm Session
-                                {% else %}
-                                    <i data-feather="headphones" class="me-2" style="color: #01aac5;"></i>
-                                    Gait Trainer Session
-                                {% endif %}
+                                <i data-feather="{{ mode_config.icon }}" class="me-2" style="color: #01aac5;"></i>
+                                {{ mode_config.title }}
                             </h4>
                             <p class="text-muted mb-0 small">
-                                {% if therapy_session.session_type == 'speech_rhythm' %}
-                                    Practice speech rhythm with syllable timing, audio rhythm synchronization, and vocal exercise
-                                {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                    Coordinate arm and hand movements with rhythmic beats and real-time skeleton motion tracking
-                                {% elif therapy_session.session_type == 'melodic_intonation' %}
-                                    Use singing and melodic intonation to improve speech fluency with auditory rhythm cues
-                                {% elif therapy_session.session_type == 'balance_training' %}
-                                    Improve stability, posture alignment, and center-of-gravity balance with rhythmic auditory cues and full-body posture tracking
-                                {% elif therapy_session.session_type == 'finger_tapping' %}
-                                    Enhance fine motor coordination and finger tapping speed aligned with auditory rhythmic stimulation
-                                {% elif therapy_session.session_type == 'cognitive_rhythm' %}
-                                    Enhance attention, memory, and cognitive sequencing through rhythmic auditory stimulation
-                                {% else %}
-                                    Synchronize your steps with the beat with full-body camera motion guidance and fused ML leg tracking
-                                {% endif %}
+                                {{ mode_config.subtitle }}
                             </p>
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
-                            Session #{{ therapy_session.id }} &bull; {{ therapy_session.session_type.replace('_', ' ').title() }}
+                            Session #{{ therapy_session.id }} &bull; {{ mode_config.title }}
                         </span>
-                        {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                        {% if mode_config.camera_required %}
+                            <span class="badge bg-secondary" id="cameraStatusBadge">
+                                <i data-feather="video-off" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+                                Camera Off
+                            </span>
+                        {% elif mode_config.microphone_required %}
                             <span class="badge bg-success" id="speechMicStatusBadge">
                                 <i data-feather="mic" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
                                 Microphone Ready
                             </span>
                         {% else %}
-                            <span class="badge bg-secondary" id="cameraStatusBadge">
-                                <i data-feather="video-off" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
-                                Camera Off
+                            <span class="badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
+                                <i data-feather="{{ mode_config.icon }}" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+                                {{ mode_config.title }} Ready
                             </span>
                         {% endif %}
                     </div>
@@ -78,7 +49,120 @@
             <div class="card-body">
                 <!-- Two-Column Interactive Session Layout -->
                 <div class="row g-4 align-items-stretch">
-                    {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                    {% if mode_config.camera_required %}
+                    <!-- Left Column: Camera Viewport (Gait Trainer / Balance Training / Upper Limb) -->
+                    <div class="col-lg-6">
+                        <div class="camera-card-wrapper">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-semibold small text-theme-adaptive">
+                                    <i data-feather="video" class="me-1" style="width: 14px; height: 14px;"></i>
+                                    {{ mode_config.camera_label }}
+                                </span>
+                                <span class="badge bg-secondary" id="cameraModeBadge">
+                                    {{ mode_config.camera_mode_badge }}
+                                </span>
+                            </div>
+
+                            <!-- Camera Viewport Box with Synchronized Fixed-Ratio Stage -->
+                            <div class="camera-preview-box mb-2" id="cameraBox">
+                                <div class="camera-stage" id="cameraStage" style="display: none; --camera-aspect-ratio: 16 / 9;">
+                                    <div class="camera-stage-media">
+                                        <video id="cameraFeed" class="camera-feed-video" playsinline autoplay muted></video>
+                                        <canvas id="cameraCanvas" style="display: none;"></canvas>
+                                        <canvas id="cameraOverlayCanvas" class="camera-feed-overlay"></canvas>
+                                    </div>
+                                    <!-- Camera Active Guidance Overlay (Shares exact stage coordinates) -->
+                                    <div id="cameraOverlay" class="camera-guide-overlay" style="display: none;">
+                                        <div id="cameraGuideFrame" class="camera-guide-frame {{ mode_config.guide_frame }}">
+                                            <span id="cameraGuideLabel" class="camera-guide-label-pill">
+                                                {{ mode_config.guide_label }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Camera OFF State Placeholder -->
+                                <div id="cameraOffState" class="camera-placeholder-state" style="padding: 2.5rem 1.5rem; text-align: center;">
+                                    <div class="camera-placeholder-icon-wrap mb-2" style="display: inline-flex; padding: 12px; border-radius: 50%; background: rgba(255,255,255,0.06); color: #94a3b8;">
+                                        <i data-feather="video-off" style="width: 26px; height: 26px;"></i>
+                                    </div>
+                                    <h6 class="text-white mb-1">Camera is currently Off</h6>
+                                    <p class="small text-muted mb-3" style="max-width: 290px; margin: 0 auto;">
+                                        {% if mode_config.key == 'gait_trainer' %}
+                                            Enable camera for dual-layer ML lower-limb movement, step cadence, and gait symmetry tracking.
+                                        {% elif mode_config.key == 'balance_training' %}
+                                            Enable camera to track full-body posture alignment, center-of-gravity, and stability balance.
+                                        {% elif mode_config.key == 'upper_limb_motor' %}
+                                            Enable camera to track arm and hand movement synchronization during the session.
+                                        {% else %}
+                                            Enable camera for real-time motion tracking.
+                                        {% endif %}
+                                    </p>
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnEnableCamera" onclick="enableCamera()">
+                                        <i data-feather="video" class="me-1" style="width: 14px; height: 14px;"></i>
+                                        Enable Camera
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Real-Time Activity Indicator -->
+                            <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if mode_config.tracking_mode == 'balance' %}
+                                        <span class="badge" id="leftLegBadge" style="background: #64748b; color: white;">Left Weight: Centered</span>
+                                        <span class="badge" id="rightLegBadge" style="background: #64748b; color: white;">Right Weight: Centered</span>
+                                    {% else %}
+                                        <span class="badge" id="leftLegBadge" style="background: #64748b; color: white;">Left Leg: <span id="leftLegState">Idle</span></span>
+                                        <span class="badge" id="rightLegBadge" style="background: #64748b; color: white;">Right Leg: <span id="rightLegState">Idle</span></span>
+                                    {% endif %}
+                                </div>
+                                <div class="small text-muted">
+                                    {% if mode_config.tracking_mode == 'balance' %}
+                                        Balance Stability: <strong id="gaitSymmetryValue" class="text-info">100%</strong>
+                                    {% else %}
+                                        Symmetry: <strong id="gaitSymmetryValue" class="text-info">--%</strong>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Camera Error Alert (Hidden by default) -->
+                            <div id="cameraAlert" class="alert alert-danger py-2 px-3 small mb-2" style="display: none;">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span id="cameraAlertText">Camera unavailable</span>
+                                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 ms-2" onclick="enableCamera()">Retry</button>
+                                </div>
+                            </div>
+
+                            <!-- Camera Controls & Live Status -->
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="small text-muted">Camera:</span>
+                                    <span id="cameraLiveStatusText" class="small text-muted">Off (Click Enable)</span>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCameraToggle" onclick="toggleCamera()" style="display: none; font-size: 0.75rem; padding: 2px 8px;">
+                                        <i data-feather="video-off" style="width: 12px; height: 12px;"></i>
+                                        Disable Camera
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Motion Activity Level Meter -->
+                            <div id="cameraMetricsBar" class="mt-2" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
+                                    <span>Motion Activity Gating:</span>
+                                    <span class="fw-bold" id="cameraMetricValue">0%</span>
+                                </div>
+                                <div class="motion-meter-container" style="height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                                    <div class="motion-meter-fill" id="cameraMetricMeter" style="height: 100%; width: 0%; background: #01aac5; transition: width 0.1s ease;"></div>
+                                </div>
+                                <div class="text-muted mt-1" style="font-size: 0.7rem;">
+                                    * Local browser processing only. No video recordings are stored or transmitted.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif mode_config.key in ['speech_rhythm', 'melodic_intonation'] %}
                     <!-- Left Column: Speech Rhythm Studio (Microphone / Vocal Pacing - Camera Not Required) -->
                     <div class="col-lg-6">
                         <div class="camera-card-wrapper d-flex flex-column justify-content-between h-100" style="min-height: 380px;">
@@ -134,147 +218,84 @@
                             </div>
                         </div>
                     </div>
-                    {% else %}
-                    <!-- Left Column: Therapy Session Camera (Gait, Balance, Upper Limb) -->
+                    {% elif mode_config.key == 'finger_tapping' %}
+                    <!-- Left Column: Interactive Finger Tapping Rhythm Studio (Camera Not Required) -->
                     <div class="col-lg-6">
-                        <div class="camera-card-wrapper">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-semibold small text-theme-adaptive">
-                                    <i data-feather="video" class="me-1" style="width: 14px; height: 14px;"></i>
-                                    {% if therapy_session.session_type == 'gait_trainer' %}
-                                        Full-Body / Movement View
-                                    {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                        Upper-Body / Arm Movement View
-                                    {% elif therapy_session.session_type == 'balance_training' %}
-                                        Full-Body / Balance Posture View
-                                    {% elif therapy_session.session_type == 'finger_tapping' %}
-                                        Hand & Finger Coordination View
-                                    {% else %}
-                                        Visual Engagement View
-                                    {% endif %}
-                                </span>
-                                <span class="badge bg-secondary" id="cameraModeBadge">
-                                    {% if therapy_session.session_type == 'gait_trainer' %}
-                                        Fused Leg Tracking
-                                    {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                        Arm Tracking
-                                    {% elif therapy_session.session_type == 'balance_training' %}
-                                        Posture & Stability Tracking
-                                    {% elif therapy_session.session_type == 'finger_tapping' %}
-                                        Finger Tapping Tracking
-                                    {% else %}
-                                        Pose Tracking
-                                    {% endif %}
-                                </span>
-                            </div>
+                        <div class="tap-pad-wrapper">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="fw-semibold small text-theme-adaptive">
+                                        <i data-feather="move" class="me-1" style="width: 14px; height: 14px; color: #01aac5;"></i>
+                                        Fine-Motor Rhythm Tap Pad
+                                    </span>
+                                    <span class="badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
+                                        Tactile Rhythm Entrainment
+                                    </span>
+                                </div>
 
-                            <!-- Camera Viewport Box (Aspect Ratio 4:3 with Mirrored Video & Overlay) -->
-                            <div class="camera-preview-box mb-2" id="cameraBox" style="position: relative; overflow: hidden; background: #041421; aspect-ratio: 4 / 3; max-height: 380px; border-radius: 8px;">
-                                <!-- Real Browser Video Stream -->
-                                <video id="cameraFeed" class="camera-feed-video" playsinline autoplay muted style="display: none; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1);"></video>
-                                <canvas id="cameraCanvas" width="160" height="120" style="display: none;"></canvas>
-                                <canvas id="cameraOverlayCanvas" class="camera-feed-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); pointer-events: none; z-index: 5;"></canvas>
-
-                                <!-- Camera OFF State Placeholder -->
-                                <div id="cameraOffState" class="camera-placeholder-state" style="padding: 2.5rem 1.5rem; text-align: center;">
-                                    <div class="camera-placeholder-icon-wrap mb-2" style="display: inline-flex; padding: 12px; border-radius: 50%; background: rgba(255,255,255,0.06); color: #94a3b8;">
-                                        <i data-feather="video-off" style="width: 26px; height: 26px;"></i>
-                                    </div>
-                                    <h6 class="text-white mb-1">Camera is currently Off</h6>
-                                    <p class="small text-muted mb-3" style="max-width: 290px; margin: 0 auto;">
-                                        {% if therapy_session.session_type == 'gait_trainer' %}
-                                            Enable camera for Dual-Layer ML leg movement, step cadence, and gait symmetry tracking.
-                                        {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                            Enable camera to track arm and hand rhythm synchronization during the session.
-                                        {% elif therapy_session.session_type == 'balance_training' %}
-                                            Enable camera to track full-body posture, center-of-gravity, and balance stability.
-                                        {% elif therapy_session.session_type == 'finger_tapping' %}
-                                            Enable camera to track hand coordination and finger tapping cadence.
-                                        {% else %}
-                                            Enable camera for visual session engagement.
-                                        {% endif %}
-                                    </p>
-                                    <button type="button" class="btn btn-primary btn-sm" id="btnEnableCamera" onclick="enableCamera()">
-                                        <i data-feather="video" class="me-1" style="width: 14px; height: 14px;"></i>
-                                        Enable Camera
+                                <!-- Big Tap Pad Target -->
+                                <div class="text-center my-4">
+                                    <button type="button" id="fingerTapBtn" class="tap-pad-button" onclick="handleFingerTap()">
+                                        <i data-feather="move" style="width: 32px; height: 32px; margin-bottom: 6px;"></i>
+                                        <span>TAP ON BEAT</span>
+                                        <span class="tap-pad-subtext">Click or Press Spacebar</span>
                                     </button>
                                 </div>
 
-                                <!-- Camera Active Guidance Overlay -->
-                                <div id="cameraOverlay" class="camera-guide-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; justify-content: center; align-items: center;">
-                                    <div class="camera-guide-frame {% if therapy_session.session_type in ['gait_trainer', 'balance_training'] %}full-body{% elif therapy_session.session_type == 'upper_limb_motor' %}upper-body{% else %}face-view{% endif %}">
-                                        <span class="camera-guide-label-pill" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.65); color: #fff; padding: 3px 12px; border-radius: 12px; font-size: 0.75rem;">
-                                            {% if therapy_session.session_type == 'gait_trainer' %}
-                                                Position Full Body or Legs In Frame
-                                            {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                                                Frame Upper Body & Arms
-                                            {% elif therapy_session.session_type == 'balance_training' %}
-                                                Position Full Body in Frame for Balance
-                                            {% elif therapy_session.session_type == 'finger_tapping' %}
-                                                Position Hand in Camera Frame
-                                            {% else %}
-                                                Visual Engagement
-                                            {% endif %}
-                                        </span>
+                                <!-- Tap Metrics Row -->
+                                <div class="row g-2 text-center mb-3">
+                                    <div class="col-4">
+                                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">Total Taps</small>
+                                            <strong id="liveTapCount" class="text-theme-adaptive" style="font-size: 1.2rem;">0</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">Tap Cadence</small>
+                                            <strong id="liveTapCadence" class="text-info" style="font-size: 1.2rem;">0</strong> <small class="text-muted">TPM</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">Sync Offset</small>
+                                            <strong id="liveTapOffset" class="text-success" style="font-size: 1.2rem;">-- ms</strong>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Real-Time Body Activity Indicator -->
-                            <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="badge" id="leftLegBadge" style="background: #64748b; color: white;">
-                                        {% if therapy_session.session_type == 'balance_training' %}Left Weight: Centered{% elif therapy_session.session_type == 'upper_limb_motor' %}Left Arm: Ready{% else %}Left Leg: <span id="leftLegState">Idle</span>{% endif %}
-                                    </span>
-                                    <span class="badge" id="rightLegBadge" style="background: #64748b; color: white;">
-                                        {% if therapy_session.session_type == 'balance_training' %}Right Weight: Centered{% elif therapy_session.session_type == 'upper_limb_motor' %}Right Arm: Ready{% else %}Right Leg: <span id="rightLegState">Idle</span>{% endif %}
-                                    </span>
-                                </div>
-                                <div class="small text-muted">
-                                    {% if therapy_session.session_type == 'balance_training' %}
-                                        Balance Stability: <strong id="gaitSymmetryValue" class="text-info">100%</strong>
-                                    {% else %}
-                                        Symmetry: <strong id="gaitSymmetryValue" class="text-info">--%</strong>
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                            <!-- Camera Error Alert (Hidden by default) -->
-                            <div id="cameraAlert" class="alert alert-danger py-2 px-3 small mb-2" style="display: none;">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <span id="cameraAlertText">Camera unavailable</span>
-                                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 ms-2" onclick="enableCamera()">Retry</button>
-                                </div>
-                            </div>
-
-                            <!-- Camera Controls & Live Status -->
-                            <div class="d-flex justify-content-between align-items-center mt-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="small text-muted">Camera:</span>
-                                    <span id="cameraLiveStatusText" class="small text-muted">Off (Click Enable)</span>
-                                </div>
+                            <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background: rgba(1, 170, 197, 0.08);">
                                 <div>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCameraToggle" onclick="toggleCamera()" style="display: none; font-size: 0.75rem; padding: 2px 8px;">
-                                        <i data-feather="video-off" style="width: 12px; height: 12px;"></i>
-                                        Disable Camera
-                                    </button>
+                                    <small class="text-muted d-block">Therapy Modality</small>
+                                    <strong class="text-theme-adaptive" style="font-size: 0.92rem;">Fine Motor Rhythmic Stimulation</strong>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block">Target Cadence</small>
+                                    <strong class="text-info" style="font-size: 0.95rem;">{{ therapy_session.initial_bpm|round|int }} BPM</strong>
                                 </div>
                             </div>
-
-                            <!-- Motion Activity Level Meter -->
-                            <div id="cameraMetricsBar" class="mt-2" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
-                                    <span>
-                                        Motion Activity Gating:
-                                    </span>
-                                    <span class="fw-bold" id="cameraMetricValue">0%</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <!-- Left Column: Cognitive / General Therapy Studio (Camera Not Required) -->
+                    <div class="col-lg-6">
+                        <div class="camera-card-wrapper d-flex flex-column justify-content-between h-100" style="min-height: 380px;">
+                            <div class="p-4 text-center my-auto">
+                                <i data-feather="{{ mode_config.icon }}" class="mb-3" style="width: 52px; height: 52px; color: #01aac5;"></i>
+                                <h5 class="text-theme-adaptive mb-2">{{ mode_config.title }}</h5>
+                                <p class="text-muted small" style="max-width: 320px; margin: 0 auto;">{{ mode_config.subtitle }}</p>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                                <div>
+                                    <small class="text-muted d-block">Modality</small>
+                                    <strong class="text-theme-adaptive">{{ mode_config.title }}</strong>
                                 </div>
-                                <div class="motion-meter-container" style="height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
-                                    <div class="motion-meter-fill" id="cameraMetricMeter" style="height: 100%; width: 0%; background: #01aac5; transition: width 0.1s ease;"></div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block">Target Cadence</small>
+                                    <strong class="text-info">{{ therapy_session.initial_bpm|round|int }} BPM</strong>
                                 </div>
-                                <div class="text-muted mt-1" style="font-size: 0.7rem;">
-                                    * Local browser processing only. No video recordings are stored or transmitted.
-                                </div>
+                            </div>
                         </div>
                     </div>
                     {% endif %}
@@ -288,11 +309,7 @@
                                     <div class="border rounded p-2 p-sm-3 h-100">
                                         <h5 id="currentBPM" class="mb-1">{{ therapy_session.initial_bpm|round|int }}</h5>
                                         <small class="text-muted">
-                                            {% if therapy_session.session_type == 'speech_rhythm' %}
-                                                Current SPM
-                                            {% else %}
-                                                Current BPM
-                                            {% endif %}
+                                            {{ mode_config.cadence_label }}
                                         </small>
                                     </div>
                                 </div>
@@ -300,11 +317,7 @@
                                     <div class="border rounded p-2 p-sm-3 h-100">
                                         <h5 id="targetBPM" class="mb-1">{{ therapy_session.target_bpm|round|int }}</h5>
                                         <small class="text-muted">
-                                            {% if therapy_session.session_type == 'speech_rhythm' %}
-                                                Target SPM
-                                            {% else %}
-                                                Target BPM
-                                            {% endif %}
+                                            {{ mode_config.target_cadence_label }}
                                         </small>
                                     </div>
                                 </div>
@@ -317,44 +330,45 @@
                                 <div class="col-3">
                                     <div class="border rounded p-2 p-sm-3 h-100">
                                         <h5 id="voiceStatus" class="mb-1">
-                                            {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                                            {% if mode_config.microphone_required %}
                                                 <i data-feather="mic-off" id="micIcon" style="width: 16px; height: 16px;"></i>
                                                 <span id="voiceIndicator" style="font-size: 0.85rem;">Silent</span>
+                                            {% elif mode_config.key == 'finger_tapping' %}
+                                                <i data-feather="move" id="micIcon" style="width: 16px; height: 16px;"></i>
+                                                <span id="voiceIndicator" style="font-size: 0.85rem;">Ready</span>
                                             {% else %}
                                                 <i data-feather="activity" id="micIcon" style="width: 16px; height: 16px;"></i>
                                                 <span id="voiceIndicator" style="font-size: 0.85rem;">Ready</span>
                                             {% endif %}
                                         </h5>
                                         <small class="text-muted">
-                                            {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
-                                                Voice Status
-                                            {% else %}
-                                                Motion Status
-                                            {% endif %}
+                                            {{ mode_config.motion_status_label }}
                                         </small>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Microphone Permission Alert (Used for Speech and Melodic Intonation) -->
+                        <!-- Microphone Permission Alert (Used only when microphone is required) -->
+                        {% if mode_config.microphone_required %}
                         <div id="micPermission" class="alert alert-warning py-2 px-3 small" style="display: none;">
                             <i data-feather="alert-circle" class="me-1"></i>
                             <strong>Microphone Required:</strong> 
                             Allow microphone access for speech syllable timing and voice analysis.
                             <button id="requestMicBtn" class="btn btn-sm btn-primary ms-2 py-0 px-2">Enable Microphone</button>
                         </div>
+                        {% endif %}
 
                         <!-- Beat Visualizer & Volume Meter -->
                         <div class="mb-3 text-center">
                             <div class="row align-items-center justify-content-center">
-                                <div class="{% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}col-7{% else %}col-12{% endif %}">
+                                <div class="{% if mode_config.microphone_required %}col-7{% else %}col-12{% endif %}">
                                     <div id="beatVisualizer" class="mx-auto" style="width: 150px; height: 150px; border: 4px solid var(--neuro-primary-border); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.1s ease;">
                                         <div id="beatIndicator" style="width: 60px; height: 60px; background: var(--neuro-primary); border-radius: 50%; transform: scale(0.8); transition: transform 0.1s ease;">
                                         </div>
                                     </div>
                                 </div>
-                                {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                                {% if mode_config.microphone_required %}
                                 <div class="col-5">
                                     <div class="text-center">
                                         <h6 class="small mb-1">Voice Level</h6>
@@ -408,21 +422,7 @@
                 <div class="alert alert-info mt-4 mb-0">
                     <i data-feather="info" class="me-2"></i>
                     <strong>Instructions:</strong> 
-                    {% if therapy_session.session_type == 'speech_rhythm' %}
-                        Speak the syllables rhythmically into your microphone in sync with each auditory beat. Practice clear vowel articulation, breath control, and steady speech cadence.
-                    {% elif therapy_session.session_type == 'upper_limb_motor' %}
-                        Move your arms and hands to the rhythm. Keep your upper body and arms visible in the camera frame to track movement synchronization and range of motion.
-                    {% elif therapy_session.session_type == 'melodic_intonation' %}
-                        Sing along with the melodic patterns. Use your voice and intonation to follow the musical phrases in rhythm with the audio cues.
-                    {% elif therapy_session.session_type == 'balance_training' %}
-                        Stand with feet shoulder-width apart or sit centered. Follow the rhythmic cues and maintain balanced weight distribution and center-of-gravity alignment while the AI tracks postural stability.
-                    {% elif therapy_session.session_type == 'finger_tapping' %}
-                        Tap your index finger or fingers rhythmically in sync with each metronome beat to stimulate fine-motor coordination and reduce motor freeze.
-                    {% elif therapy_session.session_type == 'cognitive_rhythm' %}
-                        Follow the rhythmic patterns while performing mental sequencing tasks. Focus on attention and memory exercises synchronized with the beat.
-                    {% else %}
-                        Walk in place or around the room, synchronizing each step with the beat. Ensure your body is visible in the camera frame for fused ML leg tracking, step counting, and gait symmetry.
-                    {% endif %}
+                    {{ mode_config.instructions }}
                     The AI engine automatically adapts beat tempo according to your performance.
                 </div>
             </div>
@@ -433,7 +433,7 @@
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i data-feather="activity" class="me-2"></i>
-                    Real-time Progress & BPM Tracking
+                    Real-time Progress & Cadence Tracking
                 </h5>
             </div>
             <div class="card-body">
@@ -449,20 +449,23 @@
 </div>
 
 <!-- Scripts -->
+<script src="{{ url_for('static', filename='js/session_modes.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='js/audio.js') }}"></script>
 <script src="{{ url_for('static', filename='js/leg_tracker.js') }}"></script>
 <script src="{{ url_for('static', filename='js/session.js') }}"></script>
 <script>
 // ==================================================
-// Session State & Data
+// Session State & Canonical Mode Configuration
 // ==================================================
+const modeConfig = getSessionMode("{{ therapy_session.session_type }}");
+
 let sessionData = {
     id: {{ therapy_session.id }},
     initialBPM: {{ therapy_session.initial_bpm }},
     targetBPM: {{ therapy_session.target_bpm }},
     currentBPM: {{ therapy_session.initial_bpm }},
-    sessionType: "{{ therapy_session.session_type }}",
+    sessionType: modeConfig.key,
     isRunning: false,
     startTime: null,
     duration: 0,
@@ -486,7 +489,80 @@ let voiceUpdateInterval = null;
 let chart = null;
 
 // ==================================================
-// Camera Lifecycle Management
+// Finger Tapping Tactile State
+// ==================================================
+let tapState = {
+    count: 0,
+    lastTapTime: 0,
+    intervals: [],
+    cadence: 0,
+    syncAccuracy: 100
+};
+
+function handleFingerTap() {
+    if (!sessionData.isRunning) {
+        return;
+    }
+    const now = performance.now();
+    tapState.count++;
+
+    let interval = 0;
+    if (tapState.lastTapTime > 0) {
+        interval = now - tapState.lastTapTime;
+        tapState.intervals.push(interval);
+        if (tapState.intervals.length > 10) tapState.intervals.shift();
+        const avgInterval = tapState.intervals.reduce((a, b) => a + b, 0) / tapState.intervals.length;
+        if (avgInterval > 100) {
+            tapState.cadence = Math.round(60000 / avgInterval);
+        }
+    }
+    tapState.lastTapTime = now;
+
+    // Calculate synchronization error against Tone.js audio beat
+    let nearestBeat = now;
+    if (typeof window.getNearestBeatTimestamp === 'function') {
+        nearestBeat = window.getNearestBeatTimestamp(now);
+    } else if (window.audioEngine && typeof window.audioEngine.getNearestBeatTimestamp === 'function') {
+        nearestBeat = window.audioEngine.getNearestBeatTimestamp(now);
+    }
+
+    const deltaMs = Math.round(Math.abs(now - nearestBeat));
+    let accuracy = 70;
+    if (deltaMs < 60) accuracy = 100;
+    else if (deltaMs < 140) accuracy = 85;
+    else if (deltaMs <= 220) accuracy = 65;
+    else accuracy = 40;
+
+    tapState.syncAccuracy = Math.round(tapState.syncAccuracy * 0.7 + accuracy * 0.3);
+    sessionData.accuracyScore = tapState.syncAccuracy;
+
+    // Visual ripple effect on the tap pad
+    const tapBtn = document.getElementById('fingerTapBtn');
+    if (tapBtn) {
+        tapBtn.classList.add('tap-active');
+        setTimeout(() => tapBtn.classList.remove('tap-active'), 120);
+    }
+
+    const countEl = document.getElementById('liveTapCount');
+    const cadenceEl = document.getElementById('liveTapCadence');
+    const offsetEl = document.getElementById('liveTapOffset');
+    if (countEl) countEl.textContent = tapState.count;
+    if (cadenceEl) cadenceEl.textContent = tapState.cadence || Math.round(sessionData.currentBPM);
+    if (offsetEl) offsetEl.textContent = `±${deltaMs} ms`;
+
+    updateAccuracyDisplay(sessionData.accuracyScore);
+    updateVoiceOrMotionIndicator(true, 'Tapping');
+}
+
+function onSpacebarTap(e) {
+    if (e.code === 'Space' && sessionData.sessionType === 'finger_tapping') {
+        e.preventDefault();
+        handleFingerTap();
+    }
+}
+
+// ==================================================
+// Camera Lifecycle Management (Mode-Driven)
 // ==================================================
 let cameraStream = null;
 let cameraProcessingInterval = null;
@@ -495,22 +571,29 @@ let motionHistory = [];
 let isCameraActive = false;
 
 async function enableCamera() {
+    // Mode Gate: NEVER initialize camera for finger tapping or speech rhythm
+    if (!cameraRequired(sessionData.sessionType)) {
+        console.warn(`[CAMERA_INIT] Camera blocked: not required for session type: ${sessionData.sessionType}`);
+        return;
+    }
+
     const alertDiv = document.getElementById('cameraAlert');
     const alertText = document.getElementById('cameraAlertText');
-    alertDiv.style.display = 'none';
+    if (alertDiv) alertDiv.style.display = 'none';
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alertText.textContent = 'Camera access is not supported by your browser or requires a secure context (HTTPS / localhost).';
-        alertDiv.style.display = 'block';
+        if (alertText) alertText.textContent = 'Camera access is not supported by your browser or requires a secure context (HTTPS / localhost).';
+        if (alertDiv) alertDiv.style.display = 'block';
         return;
     }
 
     try {
+        console.log(`[CAMERA_INIT] Requesting userMedia stream for ${sessionData.sessionType}`);
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: 'user',
-                width: { ideal: 640 },
-                height: { ideal: 480 }
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
             },
             audio: false
         });
@@ -520,48 +603,68 @@ async function enableCamera() {
         sessionData.cameraEnabled = true;
 
         const videoEl = document.getElementById('cameraFeed');
+        const cameraStage = document.getElementById('cameraStage');
+        const overlayCanvas = document.getElementById('cameraOverlayCanvas');
+        const canvas = document.getElementById('cameraCanvas');
+
         videoEl.srcObject = stream;
         videoEl.style.display = 'block';
         await videoEl.play();
 
-        // Overlay canvas setup
-        const canvas = document.getElementById('cameraCanvas');
-        const overlayCanvas = document.getElementById('cameraOverlayCanvas');
+        // Synchronize stage aspect ratio and overlay canvas resolution to intrinsic stream
+        const vW = videoEl.videoWidth || 640;
+        const vH = videoEl.videoHeight || 480;
+
+        if (cameraStage) {
+            cameraStage.style.setProperty('--camera-aspect-ratio', `${vW} / ${vH}`);
+            cameraStage.style.display = 'flex';
+        }
+
         if (overlayCanvas) {
-            overlayCanvas.width = videoEl.videoWidth || 640;
-            overlayCanvas.height = videoEl.videoHeight || 480;
+            overlayCanvas.width = vW;
+            overlayCanvas.height = vH;
             overlayCanvas.style.display = 'block';
         }
 
-        // Initialize Leg ML Kinematics Tracker
+        // Initialize Leg ML Kinematics Tracker with mode awareness
         if (window.legTracker) {
+            window.legTracker.setTrackingMode(modeConfig.tracking_mode || 'gait');
             await window.legTracker.initialize(videoEl, canvas, overlayCanvas);
         }
 
         // Update UI states
-        document.getElementById('cameraOffState').style.display = 'none';
-        document.getElementById('cameraOverlay').style.display = 'flex';
-        document.getElementById('btnCameraToggle').style.display = 'inline-flex';
-        document.getElementById('cameraMetricsBar').style.display = 'block';
+        const offState = document.getElementById('cameraOffState');
+        if (offState) offState.style.display = 'none';
 
-        // Update camera badges
+        const overlay = document.getElementById('cameraOverlay');
+        if (overlay) overlay.style.display = 'flex';
+
+        const toggleBtn = document.getElementById('btnCameraToggle');
+        if (toggleBtn) toggleBtn.style.display = 'inline-flex';
+
+        const metricsBar = document.getElementById('cameraMetricsBar');
+        if (metricsBar) metricsBar.style.display = 'block';
+
         const badge = document.getElementById('cameraStatusBadge');
-        badge.className = 'badge bg-success camera-badge-active';
-        badge.innerHTML = '<span class="pulse-circle"></span> Camera Active';
+        if (badge) {
+            badge.className = 'badge bg-success camera-badge-active';
+            badge.innerHTML = '<span class="pulse-circle"></span> Camera Active';
+        }
 
         const statusText = document.getElementById('cameraLiveStatusText');
-        statusText.className = 'ms-1 text-success fw-bold';
-        statusText.textContent = sessionData.isRunning ? 'Active & Tracking' : 'Active (Ready)';
+        if (statusText) {
+            statusText.className = 'ms-1 text-success fw-bold';
+            statusText.textContent = sessionData.isRunning ? 'Active & Tracking' : 'Active (Ready)';
+        }
 
-        // Start processing if session is already running
         if (sessionData.isRunning) {
             startCameraProcessing();
         }
 
-        feather.replace();
-        console.log('Webcam enabled successfully for session:', sessionData.id);
+        if (typeof feather !== 'undefined') feather.replace();
+        console.log(`[CAMERA_INIT] Webcam active with stream ${vW}x${vH} for session ${sessionData.id}`);
     } catch (err) {
-        console.error('Camera access error:', err);
+        console.error('[CAMERA_INIT] Camera access error:', err);
         isCameraActive = false;
         sessionData.cameraEnabled = false;
 
@@ -576,17 +679,21 @@ async function enableCamera() {
             message = `Camera error: ${err.message || 'Please check permissions and retry.'}`;
         }
 
-        alertText.textContent = message;
-        alertDiv.style.display = 'block';
+        if (alertText) alertText.textContent = message;
+        if (alertDiv) alertDiv.style.display = 'block';
 
         const badge = document.getElementById('cameraStatusBadge');
-        badge.className = 'badge bg-danger';
-        badge.innerHTML = '<i data-feather="alert-circle" style="width:12px;height:12px;vertical-align:-1px;margin-right:4px;"></i> Camera Unavailable';
+        if (badge) {
+            badge.className = 'badge bg-danger';
+            badge.innerHTML = '<i data-feather="alert-circle" style="width:12px;height:12px;vertical-align:-1px;margin-right:4px;"></i> Camera Unavailable';
+        }
 
         const statusText = document.getElementById('cameraLiveStatusText');
-        statusText.className = 'ms-1 text-danger';
-        statusText.textContent = 'Unavailable';
-        feather.replace();
+        if (statusText) {
+            statusText.className = 'ms-1 text-danger';
+            statusText.textContent = 'Unavailable';
+        }
+        if (typeof feather !== 'undefined') feather.replace();
     }
 }
 
@@ -600,6 +707,7 @@ function stopCamera() {
             }
         });
         cameraStream = null;
+        console.log('[CAMERA_STOP] Camera stream stopped and released.');
     }
 
     if (cameraProcessingInterval) {
@@ -626,11 +734,16 @@ function stopCamera() {
         if (ctx) ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     }
 
+    const cameraStage = document.getElementById('cameraStage');
+    if (cameraStage) {
+        cameraStage.style.display = 'none';
+    }
+
     if (window.legTracker) {
         window.legTracker.reset();
     }
 
-    // Reset UI to Camera Off state
+    // Reset UI to Camera Off state if camera is supported
     const offState = document.getElementById('cameraOffState');
     if (offState) offState.style.display = 'flex';
 
@@ -655,8 +768,7 @@ function stopCamera() {
         statusText.textContent = 'Off (Click Enable)';
     }
 
-    feather.replace();
-    console.log('Camera tracks stopped and resources released.');
+    if (typeof feather !== 'undefined') feather.replace();
 }
 
 function toggleCamera() {
@@ -674,9 +786,9 @@ window.addEventListener('pagehide', stopCamera);
 // Local Browser Frame Processing & Dual-Layer Fusion
 // ==================================================
 function startCameraProcessing() {
+    if (!cameraRequired(sessionData.sessionType)) return;
     if (!isCameraActive || cameraProcessingInterval) return;
 
-    // Process at 10 FPS (100ms) for high efficiency and smooth audio
     cameraProcessingInterval = setInterval(processCameraFrame, 100);
 
     const statusText = document.getElementById('cameraLiveStatusText');
@@ -700,18 +812,20 @@ function pauseCameraProcessing() {
 }
 
 function resumeCameraProcessing() {
-    if (isCameraActive) {
+    if (isCameraActive && cameraRequired(sessionData.sessionType)) {
         startCameraProcessing();
     }
 }
 
 function processCameraFrame() {
-    if (!sessionData.isRunning || !isCameraActive) return;
+    if (!sessionData.isRunning || !isCameraActive || !cameraRequired(sessionData.sessionType)) return;
 
     const videoEl = document.getElementById('cameraFeed');
     const canvas = document.getElementById('cameraCanvas');
     if (!videoEl || !canvas || videoEl.readyState < 2) return;
 
+    canvas.width = 160;
+    canvas.height = 120;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(videoEl, 0, 0, 160, 120);
 
@@ -719,7 +833,7 @@ function processCameraFrame() {
     try {
         frameData = ctx.getImageData(0, 0, 160, 120).data;
     } catch (e) {
-        return; // Security context error
+        return;
     }
 
     let diffScore = 0;
@@ -727,33 +841,24 @@ function processCameraFrame() {
 
     if (lastFrameData) {
         let changed = 0;
-        // Sample every 4th pixel for super lightweight local processing
         for (let i = 0; i < frameData.length; i += 16) {
             const rDiff = Math.abs(frameData[i] - lastFrameData[i]);
             const gDiff = Math.abs(frameData[i + 1] - lastFrameData[i + 1]);
             const bDiff = Math.abs(frameData[i + 2] - lastFrameData[i + 2]);
             const avgDiff = (rDiff + gDiff + bDiff) / 3;
-            if (avgDiff > 24) {
-                changed++;
-            }
+            if (avgDiff > 24) changed++;
         }
         diffScore = Math.min(100, Math.round((changed / totalSampledPixels) * 320));
     }
     lastFrameData = frameData;
 
-    // Update real-time UI meter
     updateCameraMeter(diffScore);
 
-    // DUAL-LAYER SENSOR FUSION:
-    // Tier 1 (diffScore < 12) -> mark idle, save CPU/GPU
-    // Tier 1 (diffScore >= 12) -> run Tier 2 ML Leg Kinematics Model
     if (typeof runFusedLegTracking === 'function') {
         runFusedLegTracking(diffScore);
     }
 
-    // Session-specific status updating
-    const type = sessionData.sessionType;
-    if (type === 'gait_trainer' || type === 'upper_limb_motor') {
+    if (modeConfig.key === 'gait_trainer' || modeConfig.key === 'upper_limb_motor') {
         motionHistory.push({ time: Date.now(), score: diffScore });
         if (motionHistory.length > 30) motionHistory.shift();
 
@@ -762,9 +867,8 @@ function processCameraFrame() {
         } else {
             updateVoiceOrMotionIndicator(false, 'Waiting Movement');
         }
-    } else if (type === 'speech_rhythm' || type === 'melodic_intonation') {
-        const isEngaged = diffScore > 4 || true;
-        sessionData.faceFramed = isEngaged;
+    } else if (modeConfig.key === 'balance_training') {
+        updateVoiceOrMotionIndicator(true, 'Tracking Posture');
     }
 }
 
@@ -780,20 +884,20 @@ function updateVoiceOrMotionIndicator(isActive, text) {
     const micIcon = document.getElementById('micIcon');
     if (!indicator) return;
 
-    if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
-        return; // Handled by existing microphone updateVoiceStatus()
+    if (modeConfig.microphone_required) {
+        return;
     }
 
     if (isActive) {
         indicator.textContent = text || 'Active';
         indicator.style.color = '#10b981';
-        if (micIcon) micIcon.setAttribute('data-feather', 'activity');
+        if (micIcon) micIcon.setAttribute('data-feather', modeConfig.key === 'finger_tapping' ? 'move' : 'activity');
     } else {
         indicator.textContent = text || 'Ready';
         indicator.style.color = '#64748b';
-        if (micIcon) micIcon.setAttribute('data-feather', 'activity');
+        if (micIcon) micIcon.setAttribute('data-feather', modeConfig.key === 'finger_tapping' ? 'move' : 'activity');
     }
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
 }
 
 // ==================================================
@@ -807,14 +911,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     audioEngine.setSessionType(sessionData.sessionType);
                 }
                 
-                if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
+                if (modeConfig.microphone_required) {
                     checkMicrophonePermission();
                 }
             }
         });
     }
+
+    if (sessionData.sessionType === 'finger_tapping') {
+        window.addEventListener('keydown', onSpacebarTap);
+    }
+
     initializeChart();
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
+    console.log(`[SESSION] Initialized: mode=${modeConfig.key} camera=${modeConfig.camera_required} mic=${modeConfig.microphone_required}`);
 });
 
 async function checkMicrophonePermission() {
@@ -823,7 +933,7 @@ async function checkMicrophonePermission() {
         if (permission.state === 'denied' || permission.state === 'prompt') {
             showMicrophonePermissionAlert();
         } else {
-            console.log('Microphone permission granted');
+            console.log('[MIC] Microphone permission granted');
         }
     } catch (error) {
         showMicrophonePermissionAlert();
@@ -844,7 +954,7 @@ function showMicrophonePermissionAlert() {
                     await audioEngine.initializeVoiceDetection();
                 }
             } catch (error) {
-                console.error('Microphone permission denied:', error);
+                console.error('[MIC] Microphone permission denied:', error);
                 alert('Microphone access is required for AI speech rhythm tracking.');
             }
         });
@@ -886,17 +996,19 @@ function updateVoiceStatus() {
         updateAccuracyDisplay(sessionData.accuracyScore);
     }
     
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
 }
 
 function initializeChart() {
-    const ctx = document.getElementById('bpmChart').getContext('2d');
+    const chartEl = document.getElementById('bpmChart');
+    if (!chartEl) return;
+    const ctx = chartEl.getContext('2d');
     chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
             datasets: [{
-                label: 'BPM',
+                label: modeConfig.cadence_unit,
                 data: [],
                 borderColor: '#01aac5',
                 backgroundColor: 'rgba(1, 170, 197, 0.12)',
@@ -930,29 +1042,25 @@ function startSession() {
     sessionData.isRunning = true;
     sessionData.startTime = new Date();
     
-    // Update UI controls
     document.getElementById('startBtn').style.display = 'none';
     document.getElementById('pauseBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'inline-block';
     
-    // Start audio engine
     if (typeof startAudioEngine === 'function') {
         startAudioEngine(sessionData.currentBPM);
     }
     
-    // Start camera processing if camera is active
-    if (isCameraActive) {
+    if (cameraRequired(sessionData.sessionType) && isCameraActive) {
         startCameraProcessing();
     }
     
-    // Start intervals
     sessionTimer = setInterval(updateTimer, 1000);
     updateInterval = setInterval(updateSession, 5000);
-    if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
+    if (modeConfig.microphone_required) {
         voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
     }
     
-    console.log('Session started with session ID:', sessionData.id);
+    console.log(`[SESSION] Started session id=${sessionData.id} mode=${sessionData.sessionType}`);
 }
 
 function pauseSession() {
@@ -974,8 +1082,8 @@ function pauseSession() {
         clearInterval(voiceUpdateInterval);
     }
     
-    feather.replace();
-    console.log('Session paused');
+    if (typeof feather !== 'undefined') feather.replace();
+    console.log('[SESSION] Session paused');
 }
 
 function stopSession() {
@@ -991,6 +1099,7 @@ function stopSession() {
     }
     
     stopCamera();
+    window.removeEventListener('keydown', onSpacebarTap);
     
     const now = new Date();
     sessionData.duration = sessionData.startTime ? Math.floor((now - sessionData.startTime) / 1000) : 0;
@@ -1003,6 +1112,20 @@ async function completeSessionOnServer() {
         const leftSteps = sessionData.leftStepsCount || (window.legTracker ? window.legTracker.leftStepsCount : 0);
         const rightSteps = sessionData.rightStepsCount || (window.legTracker ? window.legTracker.rightStepsCount : 0);
         const avgSymmetry = sessionData.averageSymmetry || (window.legTracker ? window.legTracker.averageSymmetry : 100);
+        const tapCount = tapState ? tapState.count : 0;
+        const tapCadence = tapState ? (tapState.cadence || Math.round(sessionData.currentBPM)) : 0;
+        const postureStability = window.legTracker ? window.legTracker.balanceStabilityScore : 100;
+
+        let notes = `Completed ${modeConfig.title} session.`;
+        if (sessionData.sessionType === 'gait_trainer') {
+            notes = `Completed Gait Trainer session with fused ML leg tracking. Symmetry: ${avgSymmetry}%. Steps: ${leftSteps} left / ${rightSteps} right.`;
+        } else if (sessionData.sessionType === 'balance_training') {
+            notes = `Completed Balance Training session. Posture stability: ${postureStability}%. Center of gravity alignment maintained.`;
+        } else if (sessionData.sessionType === 'finger_tapping') {
+            notes = `Completed Finger Tapping session. Total taps: ${tapCount}, Cadence: ${tapCadence} TPM.`;
+        } else if (sessionData.sessionType === 'speech_rhythm') {
+            notes = `Completed Speech Rhythm session with rhythmic syllable pacing and vocal synchronization.`;
+        }
 
         const response = await fetch(`/session/${sessionData.id}/complete`, {
             method: 'POST',
@@ -1016,7 +1139,10 @@ async function completeSessionOnServer() {
                 left_steps: leftSteps,
                 right_steps: rightSteps,
                 gait_symmetry: avgSymmetry,
-                notes: `Completed ${sessionData.sessionType.replace('_', ' ')} session with fused ML leg tracking. Symmetry: ${avgSymmetry}%. Left steps: ${leftSteps}, Right steps: ${rightSteps}.`
+                tap_count: tapCount,
+                tap_cadence: tapCadence,
+                posture_stability: postureStability,
+                notes: notes
             })
         });
         
@@ -1041,8 +1167,8 @@ async function completeSessionOnServer() {
             if (durEl) durEl.textContent = `${sessionData.duration || 0}s`;
             if (bpmEl) bpmEl.textContent = Math.round(sessionData.currentBPM || 0);
 
-            const isSpeech = (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation');
-            if (isSpeech) {
+            // Modality-specific completed modal labels & values
+            if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
                 if (metric3Label) metric3Label.textContent = 'Pacing (SPM)';
                 if (metric4Label) metric4Label.textContent = 'Vocal Sync';
                 if (stepsEl) stepsEl.textContent = `${Math.round(sessionData.currentBPM || 0)} SPM`;
@@ -1051,7 +1177,12 @@ async function completeSessionOnServer() {
                 if (metric3Label) metric3Label.textContent = 'Posture Sway';
                 if (metric4Label) metric4Label.textContent = 'Stability';
                 if (stepsEl) stepsEl.textContent = 'Centered';
-                if (symEl) symEl.textContent = `${Math.round(sessionData.accuracyScore || 92)}%`;
+                if (symEl) symEl.textContent = `${Math.round(postureStability)}%`;
+            } else if (sessionData.sessionType === 'finger_tapping') {
+                if (metric3Label) metric3Label.textContent = 'Total Taps';
+                if (metric4Label) metric4Label.textContent = 'Cadence';
+                if (stepsEl) stepsEl.textContent = `${tapCount}`;
+                if (symEl) symEl.textContent = `${tapCadence} TPM`;
             } else {
                 if (metric3Label) metric3Label.textContent = 'Steps (L/R)';
                 if (metric4Label) metric4Label.textContent = 'Symmetry';
@@ -1090,6 +1221,7 @@ function confirmExitSession() {
     }
     if (typeof stopAudioEngine === 'function') stopAudioEngine();
     if (typeof stopCamera === 'function') stopCamera();
+    window.removeEventListener('keydown', onSpacebarTap);
     return true;
 }
 
@@ -1101,8 +1233,10 @@ function updateTimer() {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     
-    document.getElementById('sessionTimer').textContent = 
-        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const timerEl = document.getElementById('sessionTimer');
+    if (timerEl) {
+        timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
 }
 
 async function updateSession() {
@@ -1110,13 +1244,17 @@ async function updateSession() {
     
     let currentAccuracy;
     
-    if ((sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') && audioEngine && audioEngine.voiceDetectionActive) {
+    if (modeConfig.microphone_required && audioEngine && audioEngine.voiceDetectionActive) {
         const voiceAccuracy = audioEngine.getVoiceSyncAccuracy();
-        currentAccuracy = voiceAccuracy > 0 ? voiceAccuracy : Math.random() * 25 + 72;
+        currentAccuracy = voiceAccuracy > 0 ? voiceAccuracy : Math.random() * 20 + 75;
+    } else if (sessionData.sessionType === 'finger_tapping') {
+        currentAccuracy = tapState.syncAccuracy;
     } else if (isCameraActive && sessionData.cameraSyncAccuracy > 0) {
         currentAccuracy = sessionData.cameraSyncAccuracy;
+    } else if (isCameraActive && sessionData.sessionType === 'balance_training') {
+        currentAccuracy = window.legTracker ? window.legTracker.balanceStabilityScore : 95;
     } else {
-        currentAccuracy = Math.random() * 25 + 70;
+        currentAccuracy = Math.random() * 20 + 75;
     }
     
     sessionData.accuracyScore = currentAccuracy;
@@ -1147,7 +1285,10 @@ async function updateSession() {
                 camera_enabled: isCameraActive,
                 left_steps: sessionData.leftStepsCount || (window.legTracker ? window.legTracker.leftStepsCount : 0),
                 right_steps: sessionData.rightStepsCount || (window.legTracker ? window.legTracker.rightStepsCount : 0),
-                gait_symmetry: sessionData.averageSymmetry || (window.legTracker ? window.legTracker.averageSymmetry : 100)
+                gait_symmetry: sessionData.averageSymmetry || (window.legTracker ? window.legTracker.averageSymmetry : 100),
+                tap_count: tapState ? tapState.count : 0,
+                tap_cadence: tapState ? tapState.cadence : 0,
+                posture_stability: window.legTracker ? window.legTracker.balanceStabilityScore : 100
             })
         });
         

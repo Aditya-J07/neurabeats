@@ -195,11 +195,24 @@ def _generate_deterministic_patient_feedback(session_type: str, accuracy: float,
         else:
             return f"Good commitment to your balance training today—every session strengthens your core stability and center of gravity! Rest comfortably in a seated position."
 
-    total_steps = left_steps + right_steps
-    step_phrase = f" and {total_steps} bilateral steps" if total_steps > 0 else ""
-    sym_phrase = f" with {round(symmetry)}% symmetry" if symmetry > 0 else ""
+    if session_type == 'finger_tapping':
+        if accuracy >= 80:
+            return f"Wonderful work maintaining fine-motor finger tapping rhythm today with {round(accuracy)}% rhythm synchronization accuracy! Relax your hands and fingers before your next session."
+        else:
+            return f"Great effort practicing your finger tapping coordination today—regular fine-motor tapping practice stimulates neuromuscular recovery! Rest your hands comfortably."
 
+    if session_type == 'gait_trainer':
+        total_steps = left_steps + right_steps
+        step_phrase = f" and {total_steps} bilateral steps" if total_steps > 0 else ""
+        sym_phrase = f" with {round(symmetry)}% symmetry" if symmetry > 0 else ""
+        if accuracy >= 80:
+            return f"Wonderful work maintaining walking rhythm today with an accuracy of {round(accuracy)}%{sym_phrase}{step_phrase}! Take a few minutes to sit down, hydrate, and give your muscles a well-deserved rest."
+        else:
+            return f"Great effort completing your gait training session today{step_phrase}—every minute of practice strengthens neural recovery! Rest comfortably and hydrate before your next activity."
+
+    # General fallback for any other session type (no gait terminology)
     if accuracy >= 80:
-        return f"Wonderful work maintaining rhythm today with an accuracy of {round(accuracy)}%{sym_phrase}{step_phrase}! Take a few minutes to sit down, hydrate, and give your muscles a well-deserved rest."
+        return f"Wonderful work maintaining rhythm today with an accuracy of {round(accuracy)}%! Take a few minutes to rest, hydrate, and recharge before your next activity."
     else:
-        return f"Great effort completing your therapy session today{step_phrase}—every minute of practice strengthens neural recovery! Rest comfortably and hydrate before your next activity."
+        return f"Great effort completing your therapy session today—consistent practice supports neural recovery! Rest comfortably before your next activity."
+

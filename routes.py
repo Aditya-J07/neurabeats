@@ -3,6 +3,7 @@ from app import app, db
 from models import User, PatientProfile, ClinicianProfile, TherapySession, SessionMetrics, BaselineAssessment
 from datetime import datetime, timedelta
 import logging
+from session_modes import get_session_mode, normalize_session_type, is_camera_required
 
 @app.route('/')
 def index():
@@ -285,7 +286,8 @@ def start_session():
             db.session.commit()
 
         data = request.get_json(silent=True) or request.form.to_dict() or {}
-        session_type = data.get('session_type', 'gait_trainer') or 'gait_trainer'
+        raw_session_type = data.get('session_type', 'gait_trainer') or 'gait_trainer'
+        session_type = normalize_session_type(raw_session_type)
 
         try:
             initial_bpm = float(data.get('initial_bpm', 60))
@@ -372,7 +374,8 @@ def session_view(session_id):
         flash('Unauthorized access to session.', 'error')
         return redirect(url_for('patient_dashboard'))
 
-    return render_template('session.html', therapy_session=therapy_session)
+    mode_config = get_session_mode(therapy_session.session_type)
+    return render_template('session.html', therapy_session=therapy_session, mode_config=mode_config)
 
 @app.route('/session/update', methods=['POST'])
 def update_session():
@@ -484,6 +487,10 @@ def complete_session(session_id):
         therapy_session.accuracy_score = accuracy_score
         therapy_session.notes = request.json.get('notes', '')
 
+        tap_count = int(request.json.get('tap_count', 0))
+        tap_cadence = float(request.json.get('tap_cadence', 0))
+        posture_stability = float(request.json.get('posture_stability', 100 if therapy_session.session_type == 'balance_training' else 0))
+
         metrics_dict = request.json.get('metrics_data', {})
         if not isinstance(metrics_dict, dict):
             metrics_dict = {}
@@ -491,6 +498,9 @@ def complete_session(session_id):
         metrics_dict['right_steps'] = right_steps
         metrics_dict['total_steps'] = left_steps + right_steps
         metrics_dict['gait_symmetry'] = gait_symmetry
+        metrics_dict['tap_count'] = tap_count
+        metrics_dict['tap_cadence'] = tap_cadence
+        metrics_dict['posture_stability'] = posture_stability
         therapy_session.set_metrics(metrics_dict)
 
         db.session.commit()
@@ -512,7 +522,10 @@ def complete_session(session_id):
             'feedback': feedback,
             'left_steps': left_steps,
             'right_steps': right_steps,
-            'gait_symmetry': gait_symmetry
+            'gait_symmetry': gait_symmetry,
+            'tap_count': tap_count,
+            'tap_cadence': tap_cadence,
+            'posture_stability': posture_stability
         })
 
     except Exception as e:

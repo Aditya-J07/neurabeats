@@ -128,6 +128,18 @@ class TherapySession(db.Model):
     def gait_symmetry(self):
         return self.get_metrics().get('gait_symmetry', 0)
 
+    @property
+    def tap_count(self):
+        return self.get_metrics().get('tap_count', 0)
+
+    @property
+    def tap_cadence(self):
+        return self.get_metrics().get('tap_cadence', 0)
+
+    @property
+    def posture_stability(self):
+        return self.get_metrics().get('posture_stability', 100 if self.session_type == 'balance_training' else 0)
+
 class SessionMetrics(db.Model):
     __tablename__ = 'session_metrics'
     

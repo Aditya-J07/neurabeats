@@ -257,8 +257,10 @@ class TherapySession {
         const bpmRange = this.bpmHistory.length > 0 ? 
             `${Math.min(...this.bpmHistory.map(h => h.bpm))} - ${Math.max(...this.bpmHistory.map(h => h.bpm))}` :
             `${this.initialBPM}`;
+        const mode = (typeof getSessionMode === 'function' && typeof sessionData !== 'undefined') ? getSessionMode(sessionData.sessionType) : null;
+        const title = mode ? mode.title : 'Therapy';
             
-        return `Gait trainer session completed. Duration: ${Math.floor(this.duration / 60)}:${(this.duration % 60).toString().padStart(2, '0')}. ` +
+        return `${title} session completed. Duration: ${Math.floor(this.duration / 60)}:${(this.duration % 60).toString().padStart(2, '0')}. ` +
                `BPM range: ${bpmRange}. Average accuracy: ${Math.round(avgAccuracy)}%.`;
     }
 
