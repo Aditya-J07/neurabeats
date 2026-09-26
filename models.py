@@ -98,6 +98,7 @@ class TherapySession(db.Model):
     agent_decisions = db.relationship('AgentDecision', backref='session', lazy=True, cascade='all, delete-orphan')
     interventions = db.relationship('Intervention', backref='session', lazy=True, cascade='all, delete-orphan')
     summary = db.relationship('SessionSummary', backref='session', uselist=False, cascade='all, delete-orphan')
+    clinical_report = db.relationship('ClinicalReport', backref='therapy_session', uselist=False, cascade='all, delete-orphan')
     
     def set_metrics(self, metrics_dict):
         self.metrics_data = json.dumps(metrics_dict)

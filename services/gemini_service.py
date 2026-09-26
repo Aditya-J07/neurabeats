@@ -605,45 +605,17 @@ def generate_structured_clinical_report(
 
     try:
         from google.genai import types
+        from services.prompt_service import PromptService
 
-        prompt = f"""
-You are a clinical neurorehabilitation specialist analyzing a completed Rhythmic Auditory Stimulation (RAS) therapy session.
-Generate a structured, empathetic, and clinically precise progress report in valid JSON.
-
-{historical_context or 'No prior session history available.'}
-
-[SESSION METRICS]
-Activity Type: {session_data.get('activity_type', 'gait_trainer')}
-Duration: {session_data.get('duration_seconds', 0)} seconds
-Initial Tempo: {session_data.get('initial_bpm', 60)} BPM
-Final Tempo: {session_data.get('final_bpm', 60)} BPM
-Accuracy Score: {session_data.get('accuracy_score', 0)}%
-Movement Count: {session_data.get('movement_count', 0)}
-
-[REQUIRED JSON SCHEMA]
-{{
-  "summary": "2-3 sentence clinical synopsis of cadence entrainment, rhythm following, and motor stability.",
-  "what_you_did": [
-    "Completed bilateral movement exercise at target cadence.",
-    "Maintained entrainment through auditory pacing."
-  ],
-  "performance_observations": [
-    "Observed rhythm stability and consistency across tempo transitions."
-  ],
-  "what_to_improve": [
-    "Refine bilateral step symmetry under extended movement demand."
-  ],
-  "recommendations": [
-    "Continue pacing within learned stable cadence envelope."
-  ],
-  "soap": {{
-    "subjective": "Patient engaged attentively with rhythmic auditory cues throughout the session.",
-    "objective": "Completed {session_data.get('duration_seconds', 0)}s session with final cadence of {session_data.get('final_bpm', 60)} BPM and {session_data.get('accuracy_score', 0)}% synchronization accuracy.",
-    "assessment": "Demonstrated functional motor entrainment with stable cadence maintenance.",
-    "plan": "Advance target cadence by 2 BPM in subsequent session as tolerated."
-  }}
-}}
-"""
+        prompt = PromptService.get_prompt("clinical_report", {
+            "historical_context": historical_context or "No prior session history available.",
+            "activity_type": session_data.get('activity_type', 'gait_trainer'),
+            "duration_seconds": session_data.get('duration_seconds', 0),
+            "initial_bpm": session_data.get('initial_bpm', 60),
+            "final_bpm": session_data.get('final_bpm', 60),
+            "accuracy_score": session_data.get('accuracy_score', 0),
+            "movement_count": session_data.get('movement_count', 0)
+        })
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,

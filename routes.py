@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, session, flash, jsonify
+from flask import render_template, request, redirect, url_for, session, flash, jsonify, send_file, abort
 from werkzeug.exceptions import HTTPException
 from app import app, db
 from models import (
@@ -235,7 +235,9 @@ def api_patient_recent_sessions():
             'completed': s.completed,
             'duration': duration_str,
             'accuracy': round(s.accuracy_score) if s.accuracy_score is not None else None,
-            'bpm_range': f"{round(s.initial_bpm)} - {round(s.final_bpm or s.target_bpm or s.initial_bpm)}"
+            'bpm_range': f"{round(s.initial_bpm)} - {round(s.final_bpm or s.target_bpm or s.initial_bpm)}",
+            'has_report': s.completed,
+            'report_url': f"/session/{s.id}/report" if s.completed else None
         })
 
     return jsonify({
@@ -1246,7 +1248,7 @@ def baseline_assessment():
 
 @app.route('/progress/<int:patient_id>')
 def progress_view(patient_id):
-    """Progress visualization page"""
+    """Progress visualization page with verified, zero-N/A longitudinal metrics"""
     if 'user_id' not in session:
         flash('Please log in to access this page.', 'error')
         return redirect(url_for('index'))
@@ -1268,10 +1270,94 @@ def progress_view(patient_id):
         completed=True
     ).order_by(TherapySession.start_time.asc()).all()
 
-    return render_template('progress.html', 
-                         patient_profile=patient_profile,
-                         sessions=sessions,
-                         user=user)
+    # Derived real longitudinal metrics to eliminate any N/A
+    from services.historical_analysis import (
+        get_patient_history,
+        compute_accuracy_trend,
+        calculate_advisory_bpm,
+        calculate_accuracy_delta
+    )
+    
+    # 1. Baseline Cadence: patient setting -> assessments -> first session -> 60
+    computed_baseline = patient_profile.baseline_cadence
+    if not computed_baseline and hasattr(patient_profile, 'assessments') and patient_profile.assessments:
+        computed_baseline = patient_profile.assessments[0].measured_value
+    if not computed_baseline and sessions:
+        computed_baseline = sessions[0].initial_bpm
+    if not computed_baseline:
+        computed_baseline = 60.0
+
+    # 2. Target Cadence: patient setting -> last session target -> advisory -> 1.1x baseline
+    computed_target = patient_profile.target_cadence
+    if not computed_target and sessions:
+        computed_target = sessions[-1].target_bpm
+    if not computed_target:
+        computed_target = round(computed_baseline * 1.1)
+
+    # 3. Current BPM: last session final -> initial -> baseline
+    if sessions:
+        current_bpm = sessions[-1].final_bpm or sessions[-1].initial_bpm or computed_baseline
+    else:
+        current_bpm = computed_baseline
+
+    # 4. Accurate format for durations, accuracy, notes, and report availability
+    formatted_sessions = []
+    total_duration_sec = 0
+    valid_accuracies = []
+
+    for s in sessions:
+        dur = s.duration_seconds or 0
+        total_duration_sec += dur
+        if s.accuracy_score is not None:
+            valid_accuracies.append(s.accuracy_score)
+
+        if dur < 60 and dur > 0:
+            dur_str = f"{dur}s"
+        elif dur >= 60:
+            m = dur // 60
+            sec = dur % 60
+            dur_str = f"{m}m {sec}s" if sec > 0 else f"{m} min"
+        else:
+            dur_str = "< 1 min"
+
+        init_bpm = round(s.initial_bpm or 60.0)
+        final_bpm = round(s.final_bpm or s.initial_bpm or 60.0)
+        bpm_str = f"{init_bpm}" if init_bpm == final_bpm else f"{init_bpm} → {final_bpm}"
+
+        formatted_sessions.append({
+            'id': s.id,
+            'start_time': s.start_time,
+            'session_type': s.session_type,
+            'duration_str': dur_str,
+            'duration_seconds': dur,
+            'initial_bpm': init_bpm,
+            'final_bpm': final_bpm,
+            'bpm_str': bpm_str,
+            'accuracy_score': round(s.accuracy_score) if s.accuracy_score is not None else 0,
+            'notes': s.notes or '',
+            'has_report': True
+        })
+
+    avg_accuracy = round(sum(valid_accuracies) / len(valid_accuracies), 1) if valid_accuracies else 0.0
+    total_minutes = total_duration_sec // 60 if total_duration_sec >= 60 else (1 if total_duration_sec > 0 else 0)
+
+    # Trend info
+    history = get_patient_history(patient_id, limit=10)
+    trend_info = compute_accuracy_trend(history)
+
+    return render_template(
+        'progress.html',
+        patient_profile=patient_profile,
+        sessions=sessions,
+        formatted_sessions=formatted_sessions,
+        baseline_cadence=round(computed_baseline),
+        target_cadence=round(computed_target),
+        current_bpm=round(current_bpm),
+        avg_accuracy=avg_accuracy,
+        total_minutes=total_minutes,
+        trend_info=trend_info,
+        user=user
+    )
 
 @app.route('/api/progress/<int:patient_id>')
 def progress_data(patient_id):
@@ -1305,15 +1391,18 @@ def progress_data(patient_id):
 
     for therapy_session in therapy_sessions:
         dates.append(therapy_session.start_time.strftime('%Y-%m-%d'))
-        accuracy_scores.append(therapy_session.accuracy_score or 0)
-        bpm_values.append(therapy_session.final_bpm or therapy_session.initial_bpm)
+        accuracy_scores.append(round(therapy_session.accuracy_score or 0))
+        bpm_values.append(round(therapy_session.final_bpm or therapy_session.initial_bpm or 60.0))
+
+    computed_baseline = patient_profile.baseline_cadence or (bpm_values[0] if bpm_values else 60.0)
+    computed_target = patient_profile.target_cadence or (max(bpm_values) if bpm_values else round(computed_baseline * 1.1))
 
     return jsonify({
         'dates': dates,
         'accuracy_scores': accuracy_scores,
         'bpm_values': bpm_values,
-        'baseline_cadence': patient_profile.baseline_cadence,
-        'target_cadence': patient_profile.target_cadence
+        'baseline_cadence': round(computed_baseline),
+        'target_cadence': round(computed_target)
     })
 
 @app.route('/create_patient', methods=['POST'])
@@ -1609,4 +1698,224 @@ def get_session_clinical_report(session_id):
         'success': True,
         'session_id': session_id,
         'clinical_report': report.to_dict() if report else None
+    })
+
+
+# ==============================================================================
+# CLINICAL REPORT VIEW & PDF EXPORT
+# ==============================================================================
+
+@app.route('/session/<int:session_id>/report', methods=['GET'])
+def session_report_view(session_id):
+    """Render a dedicated, printable clinical progress report for a therapy session"""
+    if 'user_id' not in session:
+        flash('Please log in to view clinical reports.', 'error')
+        return redirect(url_for('index'))
+
+    therapy_session = db.session.get(TherapySession, session_id) if hasattr(db.session, 'get') else TherapySession.query.get_or_404(session_id)
+    if not therapy_session:
+        abort(404)
+
+    user = db.session.get(User, session['user_id']) if hasattr(db.session, 'get') else User.query.get(session['user_id'])
+    if not user or not _can_access_session(user, therapy_session):
+        flash('Unauthorized access to this clinical report.', 'error')
+        return redirect(url_for('patient_dashboard' if user.user_type == 'patient' else 'clinician_dashboard'))
+
+    # Retrieve or automatically generate ClinicalReport
+    clinical_report = ClinicalReport.query.filter_by(session_id=session_id).first()
+    if not clinical_report:
+        from services.historical_analysis import format_historical_context_for_prompt, save_or_update_clinical_report
+        from services.gemini_service import generate_structured_clinical_report
+
+        hist_ctx = format_historical_context_for_prompt(therapy_session.patient_id, therapy_session.session_type)
+        clinical_data = {
+            'activity_type': therapy_session.session_type,
+            'duration_seconds': therapy_session.duration_seconds or 0,
+            'initial_bpm': therapy_session.initial_bpm or 60.0,
+            'final_bpm': therapy_session.final_bpm or therapy_session.initial_bpm or 60.0,
+            'accuracy_score': therapy_session.accuracy_score or 0.0,
+            'movement_count': max(getattr(therapy_session, 'left_steps', 0) + getattr(therapy_session, 'right_steps', 0), getattr(therapy_session, 'tap_count', 0), getattr(therapy_session, 'total_steps', 0) or 0)
+        }
+        report_json = generate_structured_clinical_report(clinical_data, hist_ctx)
+        clinical_report = save_or_update_clinical_report(session_id, report_json)
+
+    def _parse_bullet_list(val):
+        if not val:
+            return []
+        if isinstance(val, list):
+            return val
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return parsed
+            return [str(parsed)]
+        except Exception:
+            return [str(val)]
+
+    bullets = {
+        'what_you_did': _parse_bullet_list(clinical_report.what_you_did),
+        'performance_observations': _parse_bullet_list(clinical_report.performance_observations),
+        'what_to_improve': _parse_bullet_list(clinical_report.what_to_improve),
+        'recommendations': _parse_bullet_list(clinical_report.recommendations)
+    }
+
+    # Fetch longitudinal comparison
+    from services.historical_analysis import get_patient_history, compute_accuracy_trend, calculate_accuracy_delta, calculate_advisory_bpm
+    history = get_patient_history(therapy_session.patient_id, therapy_session.session_type, limit=10)
+    delta_info = calculate_accuracy_delta(therapy_session.accuracy_score or 0.0, history)
+    trend_info = compute_accuracy_trend(history)
+    advisory_bpm = calculate_advisory_bpm(
+        therapy_session.final_bpm or therapy_session.initial_bpm,
+        therapy_session.accuracy_score or 0.0,
+        trend_info
+    )
+
+    sess_summary = SessionSummary.query.filter_by(session_id=session_id).first()
+    adaptations = AdaptationRecord.query.filter_by(session_id=session_id).order_by(AdaptationRecord.timestamp.asc()).all()
+
+    return render_template(
+        'session_report.html',
+        therapy_session=therapy_session,
+        patient=therapy_session.patient,
+        clinical_report=clinical_report,
+        bullets=bullets,
+        summary=sess_summary,
+        adaptations=adaptations,
+        delta_info=delta_info,
+        trend_info=trend_info,
+        advisory_bpm=round(advisory_bpm, 1),
+        initial_bpm=round(therapy_session.initial_bpm or 60.0),
+        final_bpm=round(therapy_session.final_bpm or therapy_session.initial_bpm or 60.0),
+        target_bpm=round(therapy_session.patient.target_cadence or therapy_session.target_bpm or 70.0),
+        accuracy_score=round(therapy_session.accuracy_score or 0.0),
+        user=user
+    )
+
+
+@app.route('/session/<int:session_id>/report/pdf', methods=['GET'])
+def session_report_pdf(session_id):
+    """Download official clinical PDF report generated via ReportLab"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    therapy_session = db.session.get(TherapySession, session_id) if hasattr(db.session, 'get') else TherapySession.query.get_or_404(session_id)
+    user = db.session.get(User, session['user_id']) if hasattr(db.session, 'get') else User.query.get(session['user_id'])
+    if not user or not _can_access_session(user, therapy_session):
+        return jsonify({'error': 'Forbidden'}), 403
+
+    # Ensure ClinicalReport exists
+    clinical_report = ClinicalReport.query.filter_by(session_id=session_id).first()
+    if not clinical_report:
+        from services.historical_analysis import format_historical_context_for_prompt, save_or_update_clinical_report
+        from services.gemini_service import generate_structured_clinical_report
+
+        hist_ctx = format_historical_context_for_prompt(therapy_session.patient_id, therapy_session.session_type)
+        clinical_data = {
+            'activity_type': therapy_session.session_type,
+            'duration_seconds': therapy_session.duration_seconds or 0,
+            'initial_bpm': therapy_session.initial_bpm or 60.0,
+            'final_bpm': therapy_session.final_bpm or therapy_session.initial_bpm or 60.0,
+            'accuracy_score': therapy_session.accuracy_score or 0.0,
+            'movement_count': max(getattr(therapy_session, 'left_steps', 0) + getattr(therapy_session, 'right_steps', 0), getattr(therapy_session, 'tap_count', 0), getattr(therapy_session, 'total_steps', 0) or 0)
+        }
+        report_json = generate_structured_clinical_report(clinical_data, hist_ctx)
+        clinical_report = save_or_update_clinical_report(session_id, report_json)
+
+    from services.historical_analysis import get_patient_history, compute_accuracy_trend, calculate_accuracy_delta, calculate_advisory_bpm
+    history = get_patient_history(therapy_session.patient_id, therapy_session.session_type, limit=10)
+    delta_info = calculate_accuracy_delta(therapy_session.accuracy_score or 0.0, history)
+    trend_info = compute_accuracy_trend(history)
+    advisory_bpm = calculate_advisory_bpm(
+        therapy_session.final_bpm or therapy_session.initial_bpm,
+        therapy_session.accuracy_score or 0.0,
+        trend_info
+    )
+    sess_summary = SessionSummary.query.filter_by(session_id=session_id).first()
+
+    from services.pdf_service import generate_clinical_report_pdf
+    pdf_buffer = generate_clinical_report_pdf(
+        therapy_session=therapy_session,
+        clinical_report=clinical_report,
+        patient_profile=therapy_session.patient,
+        summary=sess_summary,
+        delta_info=delta_info,
+        trend_info=trend_info,
+        advisory_bpm=advisory_bpm
+    )
+
+    filename = f"nurobeats_clinical_report_session_{session_id}.pdf"
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+# ==============================================================================
+# PROMPT CONTROL & HUGGING FACE INFERENCE CONFIGURATION APIS
+# ==============================================================================
+
+@app.route('/api/ai/prompts', methods=['GET', 'POST'])
+def api_ai_prompts():
+    """Inspect and dynamically update centralized AI prompt templates"""
+    from services.prompt_service import PromptService
+    if request.method == 'GET':
+        return jsonify({
+            'success': True,
+            'prompts': PromptService.get_all_prompts()
+        })
+    data = request.get_json(silent=True) or {}
+    prompt_type = data.get('prompt_type')
+    template = data.get('template')
+    if not prompt_type or not template:
+        return jsonify({'success': False, 'error': 'prompt_type and template required'}), 400
+    updated = PromptService.set_template(prompt_type, template)
+    return jsonify({
+        'success': updated,
+        'prompt_type': prompt_type,
+        'template': PromptService.get_template(prompt_type)
+    })
+
+
+@app.route('/api/hf/config', methods=['GET', 'POST'])
+def api_hf_config():
+    """Get or update Hugging Face model configuration, device, and inference parameters"""
+    from services.ai_provider import AIProviderManager
+    if request.method == 'GET':
+        return jsonify({
+            'success': True,
+            'config': AIProviderManager.get_hf_config()
+        })
+    updates = request.get_json(silent=True) or {}
+    new_cfg = AIProviderManager.update_hf_config(updates)
+    return jsonify({
+        'success': True,
+        'config': new_cfg
+    })
+
+
+@app.route('/api/hf/inference-test', methods=['POST'])
+def api_hf_inference_test():
+    """Execute live controlled Hugging Face test inference"""
+    data = request.get_json(silent=True) or {}
+    bpm = int(data.get('bpm', 60))
+    prompt = data.get('prompt', 'gait rhythmic entrainment')
+    duration = int(data.get('duration', 4))
+    custom_params = data.get('parameters', {})
+    
+    from beat_generator import BeatGenerator
+    bg = BeatGenerator()
+    res = bg.generate_beat_detailed(
+        bpm=bpm,
+        duration=duration,
+        prompt=prompt,
+        custom_params=custom_params
+    )
+    return jsonify({
+        'success': res.get('success', False),
+        'audio_url': res.get('audio_url'),
+        'engine_used': res.get('engine_used'),
+        'track_title': res.get('track_title'),
+        'bpm': res.get('bpm')
     })

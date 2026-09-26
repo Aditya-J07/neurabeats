@@ -126,35 +126,18 @@ class BeatGenerator:
     # =========================================================================
     # Level 1: Hugging Face Neural Cloud Generation
     # =========================================================================
-    def _call_musicgen_api(self, prompt: str, bpm: int) -> Optional[bytes]:
-        """Calls Hugging Face router for neural audio generation."""
-        token = self.api_token or os.environ.get("HUGGINGFACE_API_TOKEN", "")
-        if not token or not requests:
-            return None
-
-        model_url = f"{self.base_url}/facebook/musicgen-small"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "inputs": f"{prompt}, steady {bpm} BPM rhythmic walking cue, 44.1kHz stereo",
-            "parameters": {
-                "max_new_tokens": 256,
-                "do_sample": True
-            }
-        }
-
+    def _call_musicgen_api(self, prompt: str, bpm: int, custom_params: Optional[Dict[str, Any]] = None) -> Optional[bytes]:
+        """Calls Hugging Face router for neural audio generation with genuine parameter control."""
         try:
-            resp = requests.post(model_url, headers=headers, json=payload, timeout=8)
-            if resp.status_code == 200 and len(resp.content) > 1000:
-                logger.info(f"MusicGen generated {len(resp.content)} bytes from Hugging Face.")
-                return resp.content
-            else:
-                logger.info(f"Hugging Face router returned {resp.status_code}. Engaging procedural fallback.")
-                return None
+            from services.ai_provider import AIProviderManager
+            hf_provider = AIProviderManager.get_hf_provider()
+            return hf_provider.generate_audio(
+                base_prompt=prompt,
+                bpm=bpm,
+                custom_params=custom_params
+            )
         except Exception as e:
-            logger.info(f"HF Router timeout/error ({e}). Engaging procedural fallback.")
+            logger.info(f"AI Provider error ({e}). Engaging procedural fallback.")
             return None
 
     # =========================================================================
@@ -318,7 +301,8 @@ class BeatGenerator:
         seed: Optional[int] = None,
         prompt: Optional[str] = None,
         duration: Optional[int] = None,
-        session_type: Optional[str] = None
+        session_type: Optional[str] = None,
+        custom_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Public high-level generation API.
@@ -342,7 +326,7 @@ class BeatGenerator:
         bars_count = max(2, min(16, (duration or 10) // 2))
 
         # Try Hugging Face cloud neural inference
-        neural_bytes = self._call_musicgen_api(resolved_prompt, bpm_val)
+        neural_bytes = self._call_musicgen_api(resolved_prompt, bpm_val, custom_params=custom_params)
         if neural_bytes:
             ts = int(time.time() * 1000)
             filename = f"ai_beat_neural_{st}_{bpm_val}_{ts}.wav"
