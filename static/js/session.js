@@ -87,22 +87,33 @@ class TherapySession {
             clearInterval(this.timerInterval);
         }
         
-        // Calculate final metrics
-        const finalAccuracy = Math.round(this.calculateOverallAccuracy() || 80);
-        this.duration = Math.max(1, Math.floor(((new Date()) - (this.startTime || new Date())) / 1000));
-        
-        let leftSteps = 0;
-        let rightSteps = 0;
-        let avgSymmetry = 100;
-        if (window.legTracker) {
-            leftSteps = window.legTracker.leftStepsCount || 0;
-            rightSteps = window.legTracker.rightStepsCount || 0;
-            avgSymmetry = window.legTracker.averageSymmetry || 100;
+        // Collect real telemetry data from trackers and audio engine
+        const beats = (typeof getSessionBeatTimestamps === 'function') ? getSessionBeatTimestamps() : ((window.audioEngine && typeof window.audioEngine.getBeatTimestamps === 'function') ? window.audioEngine.getBeatTimestamps() : []);
+        let moveData = {
+            movement_events: [],
+            valid_pose_frames: 0,
+            total_pose_frames: 0,
+            pose_confidence: 0,
+            left_steps: 0,
+            right_steps: 0
+        };
+        if (window.legTracker && typeof window.legTracker.getMovementSessionData === 'function') {
+            moveData = window.legTracker.getMovementSessionData();
         }
 
-        console.log(`Completing therapy session ${this.sessionId}`);
+        const leftSteps = moveData.left_steps;
+        const rightSteps = moveData.right_steps;
+        let avgSymmetry = null;
+        if (leftSteps > 0 && rightSteps > 0) {
+            avgSymmetry = Number(((Math.min(leftSteps, rightSteps) / Math.max(leftSteps, rightSteps)) * 100).toFixed(1));
+        }
+
+        const finalAccuracy = this.calculateOverallAccuracy();
+        this.duration = Math.max(1, Math.floor(((new Date()) - (this.startTime || new Date())) / 1000));
+
+        console.log(`Completing therapy session ${this.sessionId} with ${moveData.movement_events.length} movement events and ${beats.length} beats`);
         
-        // Send completion data to server
+        // Send completion data to server with full validated telemetry
         try {
             const response = await fetch(`/session/${this.sessionId}/complete`, {
                 method: 'POST',
@@ -113,6 +124,11 @@ class TherapySession {
                     duration: this.duration,
                     final_bpm: this.currentBPM,
                     accuracy_score: finalAccuracy,
+                    beat_timestamps_ms: beats,
+                    movement_events: moveData.movement_events,
+                    valid_pose_frames: moveData.valid_pose_frames,
+                    total_pose_frames: moveData.total_pose_frames,
+                    pose_confidence: moveData.pose_confidence,
                     left_steps: leftSteps,
                     right_steps: rightSteps,
                     gait_symmetry: avgSymmetry,
@@ -134,32 +150,36 @@ class TherapySession {
         }
     }
 
-    // Real accuracy calculation using NuroSync engine
+    // Real accuracy calculation using NuroSync engine - NO fake defaults
     calculateCurrentAccuracy() {
-        let accuracy = 85;
+        let accuracy = null;
         if (window.nuroSync && typeof window.nuroSync.getCurrentAccuracy === 'function') {
             accuracy = window.nuroSync.getCurrentAccuracy();
         }
         
         this.metrics.currentAccuracy = accuracy;
-        this.accuracyHistory.push({
-            timestamp: new Date(),
-            accuracy: accuracy
-        });
-        
-        // Keep only last 50 accuracy measurements
-        if (this.accuracyHistory.length > 50) {
-            this.accuracyHistory.shift();
+        if (accuracy !== null) {
+            this.accuracyHistory.push({
+                timestamp: new Date(),
+                accuracy: accuracy
+            });
+            // Keep only last 50 accuracy measurements
+            if (this.accuracyHistory.length > 50) {
+                this.accuracyHistory.shift();
+            }
         }
         
         return accuracy;
     }
 
     calculateOverallAccuracy() {
-        if (this.accuracyHistory.length === 0) return 0;
+        if (!this.accuracyHistory || this.accuracyHistory.length === 0) return null;
         
-        const totalAccuracy = this.accuracyHistory.reduce((sum, record) => sum + record.accuracy, 0);
-        return totalAccuracy / this.accuracyHistory.length;
+        const validRecords = this.accuracyHistory.filter(r => typeof r.accuracy === 'number');
+        if (validRecords.length === 0) return null;
+
+        const totalAccuracy = validRecords.reduce((sum, record) => sum + record.accuracy, 0);
+        return Math.round(totalAccuracy / validRecords.length);
     }
 
     updateBPM(newBPM) {

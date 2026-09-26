@@ -283,20 +283,21 @@ Sessions: {json.dumps(recent_sessions)}
 def generate_patient_feedback_few_shot(
     session_type: str,
     duration_sec: int,
-    accuracy: float,
+    accuracy: Optional[float],
     bpm_info: str,
     left_steps: int = 0,
     right_steps: int = 0,
-    symmetry: float = 0
+    symmetry: Optional[float] = None
 ) -> str:
     """Generate warm, empathetic post-session recovery coaching for patients."""
     client = get_gemini_client()
-    if not client:
-        return _generate_deterministic_patient_feedback(session_type, accuracy, symmetry, left_steps, right_steps)
+    if not client or accuracy is None:
+        return _generate_deterministic_patient_feedback(session_type, accuracy, symmetry or 0.0, left_steps, right_steps)
 
     from google.genai import types
 
-    step_info = f", Steps: L={left_steps} R={right_steps}, Symmetry: {round(symmetry)}%" if (left_steps > 0 or right_steps > 0 or symmetry > 0) else ""
+    step_info = f", Steps: L={left_steps} R={right_steps}, Symmetry: {round(symmetry)}%" if (left_steps > 0 or right_steps > 0 or (symmetry is not None and symmetry > 0)) else ""
+    acc_text = f"{round(accuracy)}%" if accuracy is not None else "unavailable"
 
     few_shot_prompt = f"""You are a warm, compassionate physical therapy coach for neurological recovery patients.
 Write exactly a 2-sentence encouraging post-session message based on the patient's performance.
@@ -315,7 +316,7 @@ Output: It is completely fine to start small and pause whenever you need to. Res
 
 ==================================================
 --- NOW GENERATE FOR THIS SESSION ---
-Input: Session: {session_type}, Duration: {duration_sec}s, Accuracy: {round(accuracy)}%, BPM: {bpm_info}{step_info}
+Input: Session: {session_type}, Duration: {duration_sec}s, Accuracy: {acc_text}, BPM: {bpm_info}{step_info}
 Output:
 """
 
@@ -332,7 +333,7 @@ Output:
         return response.text.strip()
     except Exception as e:
         logging.error(f"Gemini API error during patient feedback: {str(e)}")
-        return _generate_deterministic_patient_feedback(session_type, accuracy, symmetry, left_steps, right_steps)
+        return _generate_deterministic_patient_feedback(session_type, accuracy, symmetry or 0.0, left_steps, right_steps)
 
 def _generate_deterministic_clinical_fallback(patient_name: str, condition: str, baseline: Dict, sessions: List[Dict]) -> str:
     """Deterministic fallback summary when API key is missing or offline."""
@@ -351,8 +352,11 @@ def _generate_deterministic_clinical_fallback(patient_name: str, condition: str,
 - **A (Assessment):** Motor adaptation is progressing according to prescribed auditory cueing. Rhythm entrainment stability is established at current tempo band.
 - **P (Plan):** Continue current exercise regimen. Advance target cadence by +3 to +5 BPM if average alignment exceeds 80% over next 3 sessions."""
 
-def _generate_deterministic_patient_feedback(session_type: str, accuracy: float, symmetry: float = 0, left_steps: int = 0, right_steps: int = 0) -> str:
+def _generate_deterministic_patient_feedback(session_type: str, accuracy: Optional[float], symmetry: float = 0, left_steps: int = 0, right_steps: int = 0) -> str:
     """Deterministic patient recovery feedback tailored to therapy modality."""
+    if accuracy is None:
+        return "Thank you for completing your session. Insufficient movement data was captured to calculate synchronization accuracy—ensure camera visibility and rest comfortably before your next activity."
+
     if session_type in ['speech_rhythm', 'melodic_intonation']:
         if accuracy >= 80:
             return f"Wonderful work maintaining vocal rhythm today with {round(accuracy)}% rhythm synchronization accuracy! Take a few sips of water, rest your vocal cords, and relax before your next session."
@@ -374,7 +378,7 @@ def _generate_deterministic_patient_feedback(session_type: str, accuracy: float,
     if session_type == 'gait_trainer':
         total_steps = left_steps + right_steps
         step_phrase = f" and {total_steps} bilateral steps" if total_steps > 0 else ""
-        sym_phrase = f" with {round(symmetry)}% symmetry" if symmetry > 0 else ""
+        sym_phrase = f" with {round(symmetry)}% symmetry" if (symmetry is not None and symmetry > 0) else ""
         if accuracy >= 80:
             return f"Wonderful work maintaining walking rhythm today with an alignment score of {round(accuracy)}%{sym_phrase}{step_phrase}! Take a few minutes to sit down, hydrate, and give your muscles a well-deserved rest."
         else:
@@ -553,24 +557,35 @@ STRICT CONSTRAINTS:
 
 def _generate_deterministic_session_reflection(summary: Dict[str, Any]) -> Dict[str, Any]:
     """Deterministic structured session reflection baseline."""
-    avg_sync = summary.get('averageRhythmSync', 0.8)
-    avg_qual = summary.get('averageMovementQuality', 0.8)
-    imp = summary.get('improvement', 0.0)
-    best_tempo = summary.get('bestTempo', 60)
-    succ_range = summary.get('successfulTempoRange', f"{best_tempo} BPM")
+    avg_sync = summary.get('averageRhythmSync')
+    avg_qual = summary.get('averageMovementQuality')
+    imp = float(summary.get('improvement') or 0.0)
+    best_tempo = float(summary.get('bestTempo') or 60.0)
+    succ_range = summary.get('successfulTempoRange', f"{round(best_tempo)} BPM")
+    status = summary.get('measurementStatus')
+
+    if status == 'INSUFFICIENT_DATA' or avg_sync is None:
+        return {
+            "summary": "Insufficient movement data was captured during this session to evaluate rhythm synchronization.",
+            "strongAreas": ["session adherence"],
+            "areasToWatch": ["camera framing and clear movement detection"],
+            "successfulAdaptation": None,
+            "unsuccessfulAdaptation": None,
+            "nextSessionStartingPoint": round(best_tempo)
+        }
 
     strong_areas = []
-    if avg_sync >= 0.80:
+    if avg_sync is not None and avg_sync >= 0.80:
         strong_areas.append("rhythm synchronization")
-    if avg_qual >= 0.75:
+    if avg_qual is not None and avg_qual >= 0.75:
         strong_areas.append("movement consistency")
     if not strong_areas:
         strong_areas.append("protocol adherence")
 
     areas_to_watch = []
-    if avg_sync < 0.75:
+    if avg_sync is not None and avg_sync < 0.75:
         areas_to_watch.append("rhythm alignment under fatigue")
-    if avg_qual < 0.70:
+    if avg_qual is not None and avg_qual < 0.70:
         areas_to_watch.append("bilateral symmetry and smoothness")
     if not areas_to_watch:
         areas_to_watch.append("cadence stability at higher tempo")
@@ -607,13 +622,18 @@ def generate_structured_clinical_report(
         from google.genai import types
         from services.prompt_service import PromptService
 
+        meas_status = str(session_data.get('measurement_status', 'VALID'))
+        raw_accuracy = session_data.get('accuracy_score')
+        formatted_acc = f"{raw_accuracy}%" if raw_accuracy is not None else "null (Insufficient Data)"
+
         prompt = PromptService.get_prompt("clinical_report", {
             "historical_context": historical_context or "No prior session history available.",
             "activity_type": session_data.get('activity_type', 'gait_trainer'),
             "duration_seconds": session_data.get('duration_seconds', 0),
             "initial_bpm": session_data.get('initial_bpm', 60),
             "final_bpm": session_data.get('final_bpm', 60),
-            "accuracy_score": session_data.get('accuracy_score', 0),
+            "measurement_status": meas_status,
+            "accuracy_score": formatted_acc,
             "movement_count": session_data.get('movement_count', 0)
         })
         response = client.models.generate_content(
@@ -644,14 +664,48 @@ def _generate_deterministic_structured_report(
     """
     Deterministic rule-based clinical report and SOAP generator for 100% offline resilience.
     Uses exact session measurements to synthesize structured clinical observations.
+    Strictly handles INSUFFICIENT_DATA and zero movement conditions without fabricating scores.
     """
     dur = int(session_data.get("duration_seconds", 0))
     dur_min = max(1, round(dur / 60.0, 1))
     init_bpm = round(float(session_data.get("initial_bpm", 60.0)), 1)
     final_bpm = round(float(session_data.get("final_bpm", init_bpm)), 1)
-    acc = round(float(session_data.get("accuracy_score", 75.0)), 1)
-    act = str(session_data.get("activity_type", "gait_trainer")).replace("_", " ").title()
+    status = session_data.get("measurement_status", "VALID")
+    raw_acc = session_data.get("accuracy_score")
     count = int(session_data.get("movement_count", 0))
+    act = str(session_data.get("activity_type", "gait_trainer")).replace("_", " ").title()
+
+    # SECTION 23 & 30: MANDATORY INSUFFICIENT DATA RULE
+    if status == "INSUFFICIENT_DATA" or raw_acc is None or count == 0:
+        return {
+            "summary": "Insufficient movement data was captured to calculate synchronization accuracy.",
+            "what_you_did": [
+                f"Initiated {act} therapy session ({dur} seconds).",
+                f"Auditory rhythm played at {init_bpm} to {final_bpm} BPM.",
+                "Completed 0 verified movement cycles due to camera obstruction or lack of movement."
+            ],
+            "performance_observations": [
+                "No verified movement events were detected during the session interval.",
+                "Pose tracking coverage or detected kinematics remained below the minimum threshold (3 events required)."
+            ],
+            "what_to_improve": [
+                "Ensure full-body visibility in camera frame before starting session.",
+                "Actively step or tap in synchrony with auditory beats."
+            ],
+            "recommendations": [
+                f"Maintain starting cadence of {init_bpm} BPM for repeat evaluation.",
+                "Position camera at full-body height with adequate room lighting.",
+                "Verify auditory cue volume is audible before initiating movement."
+            ],
+            "soap": {
+                "subjective": "Patient initiated session; insufficient kinematic movement was registered by the tracking pipeline.",
+                "objective": f"Completed {dur}s session at {init_bpm} -> {final_bpm} BPM. Insufficient movement data was captured to calculate synchronization accuracy (0 valid movements detected).",
+                "assessment": "Unable to evaluate auditory-motor entrainment due to insufficient verified movement events. Synchronization accuracy is unavailable.",
+                "plan": f"Repeat session at {init_bpm} BPM ensuring unobstructed camera visibility and active motor execution."
+            }
+        }
+
+    acc = round(float(raw_acc), 1)
 
     if acc >= 85.0:
         synopsis = f"The patient demonstrated strong auditory-motor entrainment during {act}, maintaining consistent synchronization at {final_bpm} BPM across {dur_min} minutes. Motor stability remained high throughout the target pacing intervals."

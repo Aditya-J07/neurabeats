@@ -184,13 +184,15 @@ def generate_clinical_report_pdf(
     # 3. Quantitative Kinematic & Pacing Metrics
     story.append(Paragraph("1. Session Metrics & Telemetry", style_section_h1))
     
-    acc_val = therapy_session.accuracy_score or 0.0
+    acc_val = therapy_session.accuracy_score
+    acc_display = f"{round(acc_val, 1)}%" if acc_val is not None else "Unavailable"
     initial_bpm = round(therapy_session.initial_bpm or 60.0)
     final_bpm = round(therapy_session.final_bpm or therapy_session.initial_bpm or 60.0)
     steps_l = getattr(therapy_session, 'left_steps', 0)
     steps_r = getattr(therapy_session, 'right_steps', 0)
     total_steps = steps_l + steps_r if (steps_l + steps_r) > 0 else (getattr(therapy_session, 'total_steps', 0) or 0)
-    gait_sym = getattr(therapy_session, 'gait_symmetry', 0)
+    gait_sym = getattr(therapy_session, 'gait_symmetry', None)
+    sym_display = f"{round(gait_sym, 1)}%" if gait_sym is not None else "Unavailable"
 
     metrics_table_data = [
         [
@@ -201,9 +203,9 @@ def generate_clinical_report_pdf(
         ],
         [
             Paragraph(f"<font size='14' color='#042046'><b>{initial_bpm} → {final_bpm}</b></font> BPM", style_body),
-            Paragraph(f"<font size='14' color='#16a34a'><b>{round(acc_val, 1)}%</b></font>", style_body),
+            Paragraph(f"<font size='14' color='#16a34a'><b>{acc_display}</b></font>", style_body),
             Paragraph(f"<font size='14' color='#042046'><b>{total_steps}</b></font> cycles", style_body),
-            Paragraph(f"<font size='14' color='#042046'><b>{round(gait_sym, 1) if gait_sym else 100}%</b></font>", style_body)
+            Paragraph(f"<font size='14' color='#042046'><b>{sym_display}</b></font>", style_body)
         ]
     ]
     t_metrics = Table(metrics_table_data, colWidths=[135, 135, 135, 135])

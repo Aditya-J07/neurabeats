@@ -220,6 +220,8 @@ class NeuroAudioEngine {
             const beatNow = performance.now();
             this.lastBeatTime = beatNow;
             this.recentBeats.push(beatNow);
+            if (!this.sessionBeatTimestamps) this.sessionBeatTimestamps = [];
+            this.sessionBeatTimestamps.push(beatNow);
             if (this.recentBeats.length > 60) this.recentBeats.shift();
 
             // Record beat timestamp in NuroSync
@@ -234,6 +236,14 @@ class NeuroAudioEngine {
                 }, time);
             }
         }, "4n"); // Quarter note intervals
+    }
+
+    getBeatTimestamps() {
+        return this.sessionBeatTimestamps ? [...this.sessionBeatTimestamps] : [];
+    }
+
+    clearBeatTimestamps() {
+        this.sessionBeatTimestamps = [];
     }
 
     getNearestBeatTimestamp(timestampMs) {

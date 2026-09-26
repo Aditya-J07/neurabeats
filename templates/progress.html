@@ -45,7 +45,7 @@
                 <div class="card">
                     <div class="card-body text-center">
                         <i data-feather="target" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ avg_accuracy }}%</h4>
+                        <h4>{{ avg_accuracy ~ '%' if avg_accuracy is not none else '—' }}</h4>
                         <p class="text-muted mb-0">Avg Accuracy</p>
                     </div>
                 </div>
@@ -108,9 +108,13 @@
                     {% for session in recent_sessions %}
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <small>{{ session.start_time.strftime('%m/%d') if session.start_time else 'Session' }}</small>
-                        <span class="badge {% if (session.accuracy_score or 0) >= 80 %}bg-success{% elif (session.accuracy_score or 0) >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
-                            {{ session.accuracy_score|round|int if session.accuracy_score is not none else 0 }}%
-                        </span>
+                        {% if session.accuracy_score is not none %}
+                            <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ session.accuracy_score|round|int }}%
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary" title="Insufficient movement data">&mdash;</span>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
@@ -185,9 +189,13 @@
                                     <td>{{ s.duration_str }}</td>
                                     <td>{{ s.bpm_str }} BPM</td>
                                     <td>
-                                        <span class="badge {% if s.accuracy_score >= 80 %}bg-success{% elif s.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
-                                            {{ s.accuracy_score }}%
-                                        </span>
+                                        {% if s.accuracy_score is not none %}
+                                            <span class="badge {% if s.accuracy_score >= 80 %}bg-success{% elif s.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                                {{ s.accuracy_score }}%
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary" title="Insufficient movement data">&mdash;</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if s.notes %}
@@ -248,7 +256,7 @@
                                                 {{ session.accuracy_score|round|int }}%
                                             </span>
                                         {% else %}
-                                            <span class="badge bg-secondary">0%</span>
+                                            <span class="badge bg-secondary" title="Insufficient movement data">&mdash;</span>
                                         {% endif %}
                                     </td>
                                     <td>

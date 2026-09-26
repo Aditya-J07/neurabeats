@@ -1772,8 +1772,9 @@ async function stopSession() {
                 intertap_interval_cv: (tapState && tapState.intertapCv) || 0
             },
             sync: window.nuroSync ? window.nuroSync.getMetrics() : {
-                rhythm_alignment_score: sessionData.accuracyScore || 85,
-                on_time_pct: sessionData.accuracyScore || 85
+                valid: false,
+                rhythm_alignment_score: null,
+                on_time_pct: null
             }
         };
     }
@@ -1787,6 +1788,18 @@ async function stopSession() {
         telemetryPayload.agent_summary = window.nuroAgent && typeof window.nuroAgent.generateSessionSummary === 'function' ? window.nuroAgent.generateSessionSummary() : null;
     } catch (e) {
         console.warn('[NURO_PAYLOAD_ATTACH_ERROR]', e);
+    }
+
+    // Collect real telemetry data from trackers and audio engine before camera stop
+    const beats = (typeof getSessionBeatTimestamps === 'function') ? getSessionBeatTimestamps() : ((window.audioEngine && typeof window.audioEngine.getBeatTimestamps === 'function') ? window.audioEngine.getBeatTimestamps() : []);
+    let moveData = {
+        movement_events: [],
+        valid_pose_frames: 0,
+        total_pose_frames: 0,
+        pose_confidence: 0
+    };
+    if (window.legTracker && typeof window.legTracker.getMovementSessionData === 'function') {
+        moveData = window.legTracker.getMovementSessionData();
     }
 
     // 7. Safely stop camera and reset tracking engines
@@ -1815,6 +1828,11 @@ async function stopSession() {
         duration: sessionData.duration,
         final_bpm: sessionData.currentBPM,
         accuracy_score: sessionData.accuracyScore,
+        beat_timestamps_ms: beats,
+        movement_events: moveData.movement_events,
+        valid_pose_frames: moveData.valid_pose_frames,
+        total_pose_frames: moveData.total_pose_frames,
+        pose_confidence: moveData.pose_confidence,
         left_steps: leftSteps,
         right_steps: rightSteps,
         gait_symmetry: avgSymmetry,
@@ -1829,7 +1847,7 @@ async function completeSessionOnServer(payload) {
     try {
         let notes = `Completed ${modeConfig.title} session.`;
         if (sessionData.sessionType === 'gait_trainer') {
-            notes = `Completed Gait Trainer session with fused ML leg tracking. Symmetry: ${payload.gait_symmetry}%. Steps: ${payload.left_steps} left / ${payload.right_steps} right.`;
+            notes = `Completed Gait Trainer session with fused ML leg tracking. Symmetry: ${payload.gait_symmetry !== null ? payload.gait_symmetry + '%' : 'Unavailable'}. Steps: ${payload.left_steps} left / ${payload.right_steps} right.`;
         } else if (sessionData.sessionType === 'balance_training') {
             notes = `Completed Balance Training session. Posture stability: ${payload.posture_stability}%. Lateral sway proxy recorded.`;
         } else if (sessionData.sessionType === 'finger_tapping') {
@@ -1842,6 +1860,11 @@ async function completeSessionOnServer(payload) {
             duration: payload.duration,
             final_bpm: payload.final_bpm,
             accuracy_score: payload.accuracy_score,
+            beat_timestamps_ms: payload.beat_timestamps_ms,
+            movement_events: payload.movement_events,
+            valid_pose_frames: payload.valid_pose_frames,
+            total_pose_frames: payload.total_pose_frames,
+            pose_confidence: payload.pose_confidence,
             left_steps: payload.left_steps,
             right_steps: payload.right_steps,
             gait_symmetry: payload.gait_symmetry,

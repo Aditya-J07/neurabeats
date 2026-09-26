@@ -581,10 +581,26 @@ def complete_session(session_id):
         therapy_session.completed = True
         duration = int(data.get('duration', 0))
         final_bpm = float(data.get('final_bpm', therapy_session.initial_bpm))
-        accuracy_score = float(data.get('accuracy_score', 0))
-        left_steps = int(data.get('left_steps', 0))
-        right_steps = int(data.get('right_steps', 0))
-        gait_symmetry = float(data.get('gait_symmetry', 0))
+
+        # Authoritative SynchronizationEngine evaluation
+        from services.synchronization_engine import SynchronizationEngine
+        sync_result = SynchronizationEngine.evaluate_session(data)
+
+        # Accuracy score is derived strictly from real movements and beats (or None if insufficient)
+        if sync_result.get("synchronization_accuracy") is not None:
+            accuracy_score = sync_result["synchronization_accuracy"]
+        elif data.get('accuracy_score') is not None and sync_result.get("measurement_status") != "INSUFFICIENT_DATA":
+            try:
+                accuracy_score = float(data['accuracy_score'])
+            except (ValueError, TypeError):
+                accuracy_score = None
+        else:
+            accuracy_score = None
+
+        left_steps = int(sync_result.get('left_steps', data.get('left_steps', 0)))
+        right_steps = int(sync_result.get('right_steps', data.get('right_steps', 0)))
+        gait_symmetry = sync_result.get('symmetry')
+        measured_cadence = sync_result.get('cadence')
 
         therapy_session.duration_seconds = duration
         therapy_session.final_bpm = final_bpm
@@ -602,18 +618,23 @@ def complete_session(session_id):
         metrics_dict['right_steps'] = right_steps
         metrics_dict['total_steps'] = left_steps + right_steps
         metrics_dict['gait_symmetry'] = gait_symmetry
+        metrics_dict['cadence'] = measured_cadence
+        metrics_dict['synchronization'] = sync_result
+        metrics_dict['measurement_status'] = sync_result.get('measurement_status', 'INSUFFICIENT_DATA')
         metrics_dict['tap_count'] = tap_count
         metrics_dict['tap_cadence'] = tap_cadence
         metrics_dict['posture_stability'] = posture_stability
 
         # Generate Nuro Agent session reflection
         from services.gemini_service import generate_patient_feedback_few_shot, generate_agent_session_reflection
+        perf_fraction = (accuracy_score / 100.0) if accuracy_score is not None else None
         agent_summary = data.get('agent_summary') or metrics_dict.get('agent_summary') or data.get('summary') or {
             'sessionId': session_id,
             'duration': duration,
-            'endingPerformance': accuracy_score / 100.0 if accuracy_score else 0.8,
-            'averageRhythmSync': accuracy_score / 100.0 if accuracy_score else 0.8,
-            'bestTempo': final_bpm
+            'endingPerformance': perf_fraction,
+            'averageRhythmSync': perf_fraction,
+            'bestTempo': final_bpm,
+            'measurementStatus': sync_result.get('measurement_status')
         }
         agent_reflection = generate_agent_session_reflection(agent_summary)
         metrics_dict['agent_reflection'] = agent_reflection
@@ -625,13 +646,13 @@ def complete_session(session_id):
             sess_summary = SessionSummary(session_id=session_id)
             db.session.add(sess_summary)
         
-        sess_summary.starting_performance = float(agent_summary.get('startingPerformance') or (accuracy_score / 100.0))
-        sess_summary.ending_performance = float(agent_summary.get('endingPerformance') or (accuracy_score / 100.0))
+        sess_summary.starting_performance = perf_fraction
+        sess_summary.ending_performance = perf_fraction
         sess_summary.improvement = float(agent_summary.get('improvement') or 0.0)
-        sess_summary.average_movement_quality = float(agent_summary.get('averageMovementQuality') or (accuracy_score / 100.0))
-        sess_summary.average_rhythm_sync = float(agent_summary.get('averageRhythmSync') or (accuracy_score / 100.0))
+        sess_summary.average_movement_quality = perf_fraction
+        sess_summary.average_rhythm_sync = perf_fraction
         raw_conf = agent_summary.get('averageConfidence')
-        sess_summary.average_confidence = float(raw_conf) if raw_conf is not None else 0.9
+        sess_summary.average_confidence = float(raw_conf) if raw_conf is not None else (0.9 if sync_result.get('measurement_status') == 'VALID' else 0.0)
         sess_summary.best_tempo = float(agent_summary.get('bestTempo') or final_bpm)
         sess_summary.successful_tempo_range = str(agent_summary.get('successfulTempoRange') or f"{round(final_bpm)} BPM")
         sess_summary.successful_adaptations = int(agent_summary.get('successfulAdaptations') or 0)
@@ -651,6 +672,8 @@ def complete_session(session_id):
             data.get('status') != 'ABANDONED' and
             not data.get('abandoned', False) and
             duration >= 15.0 and
+            sync_result.get('measurement_status') == 'VALID' and
+            accuracy_score is not None and
             0.0 <= accuracy_score <= 100.0 and
             40.0 <= final_bpm <= 140.0 and
             sess_summary.average_confidence >= 0.45
@@ -696,6 +719,7 @@ def complete_session(session_id):
                 'duration': duration,
                 'final_bpm': final_bpm,
                 'accuracy_score': accuracy_score,
+                'measurement_status': sync_result.get('measurement_status'),
                 'improvement': sess_summary.improvement
             }),
             idempotency_key=f"complete_{session_id}_{int(datetime.utcnow().timestamp())}"
@@ -708,11 +732,11 @@ def complete_session(session_id):
         feedback = generate_patient_feedback_few_shot(
             therapy_session.session_type,
             duration,
-            accuracy_score,
+            accuracy_score or 0.0,
             f"{round(therapy_session.initial_bpm)} -> {round(final_bpm)}",
             left_steps=left_steps,
             right_steps=right_steps,
-            symmetry=gait_symmetry
+            symmetry=gait_symmetry or 0.0
         )
 
         # Generate and persist Structured Clinical Report (Gemini + Longitudinal Context)
@@ -728,7 +752,10 @@ def complete_session(session_id):
                 'initial_bpm': therapy_session.initial_bpm,
                 'final_bpm': final_bpm,
                 'accuracy_score': accuracy_score,
-                'movement_count': max(left_steps + right_steps, tap_count)
+                'measurement_status': sync_result.get('measurement_status', 'INSUFFICIENT_DATA'),
+                'movement_count': sync_result.get('movement_event_count', 0) or max(left_steps + right_steps, tap_count),
+                'cadence': measured_cadence,
+                'symmetry': gait_symmetry
             }
             clinical_report_json = generate_structured_clinical_report(clinical_data, hist_ctx)
             saved_report = save_or_update_clinical_report(session_id, clinical_report_json)
@@ -742,6 +769,10 @@ def complete_session(session_id):
             'feedback': feedback,
             'agent_reflection': agent_reflection,
             'clinical_report': clinical_report_dict,
+            'synchronization': sync_result,
+            'accuracy_score': accuracy_score,
+            'cadence': measured_cadence,
+            'measurement_status': sync_result.get('measurement_status', 'INSUFFICIENT_DATA'),
             'session_summary': {
                 'best_tempo': sess_summary.best_tempo,
                 'improvement': sess_summary.improvement,

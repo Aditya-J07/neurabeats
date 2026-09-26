@@ -31,7 +31,8 @@ class NuroSync {
         this.totalStepsEvaluated = 0;
         
         // Engineering score: Rhythm Alignment Score (0-100)
-        this.rhythmAlignmentScore = 85.0;
+        // Null until valid movement steps are evaluated
+        this.rhythmAlignmentScore = null;
     }
 
     calculateDynamicTolerance(bpm) {
@@ -154,7 +155,11 @@ class NuroSync {
         // Deterministic instant score: 100 at 0 error, 0 at >= toleranceMs
         const instantScore = Math.max(0, Math.min(100, Math.round(100 * (1 - absErrorMs / this.toleranceMs))));
         // Rolling exponential filter (alpha = 0.25)
-        this.rhythmAlignmentScore = Number((0.25 * instantScore + 0.75 * this.rhythmAlignmentScore).toFixed(1));
+        if (this.rhythmAlignmentScore === null) {
+            this.rhythmAlignmentScore = instantScore;
+        } else {
+            this.rhythmAlignmentScore = Number((0.25 * instantScore + 0.75 * this.rhythmAlignmentScore).toFixed(1));
+        }
 
         return this.getInstantaneousMetrics(signedErrorMs, absErrorMs, phaseError, isWithinTolerance);
     }
@@ -208,13 +213,20 @@ class NuroSync {
     }
 
     /**
-     * Backward-compatible accuracy getter returning the deterministic Rhythm Alignment Score
+     * Authoritative accuracy getter returning the deterministic Rhythm Alignment Score.
+     * Returns null if fewer than 3 valid steps evaluated.
      */
     getCurrentAccuracy() {
+        if (this.totalStepsEvaluated < 3 || this.rhythmAlignmentScore === null) {
+            return null;
+        }
         return Math.max(0, Math.min(100, Math.round(this.rhythmAlignmentScore)));
     }
 
     getRhythmAlignmentScore() {
+        if (this.totalStepsEvaluated < 3 || this.rhythmAlignmentScore === null) {
+            return null;
+        }
         return Math.max(0, Math.min(100, Math.round(this.rhythmAlignmentScore)));
     }
 
@@ -226,23 +238,23 @@ class NuroSync {
      * Returns full multi-dimensional synchronization metrics packet conforming to schema v2.0
      */
     getMetricsSummary() {
-        if (this.absoluteErrors.length === 0) {
+        if (this.absoluteErrors.length === 0 || this.totalStepsEvaluated < 3) {
             return {
                 valid: false,
-                signed_error_ms_mean: 0,
-                absolute_error_ms_mean: 0,
-                median_abs_error_ms: 0,
-                sd_ms: 0,
-                rmse_ms: 0,
-                p90_abs_error_ms: 0,
-                p95_abs_error_ms: 0,
-                on_time_pct: 100,
+                signed_error_ms_mean: null,
+                absolute_error_ms_mean: null,
+                median_abs_error_ms: null,
+                sd_ms: null,
+                rmse_ms: null,
+                p90_abs_error_ms: null,
+                p95_abs_error_ms: null,
+                on_time_pct: null,
                 early_events: 0,
                 late_events: 0,
                 on_time_events: 0,
-                total_events: 0,
-                rhythm_alignment_score: this.rhythmAlignmentScore,
-                mean_phase_error: 0
+                total_events: this.totalStepsEvaluated,
+                rhythm_alignment_score: null,
+                mean_phase_error: null
             };
         }
 
@@ -264,7 +276,7 @@ class NuroSync {
             late_events: this.lateCount,
             on_time_events: this.onTimeCount,
             total_events: this.totalStepsEvaluated,
-            rhythm_alignment_score: Math.round(this.rhythmAlignmentScore),
+            rhythm_alignment_score: this.rhythmAlignmentScore !== null ? Math.round(this.rhythmAlignmentScore) : null,
             mean_phase_error: this.getMean(this.phaseErrors)
         };
     }
@@ -279,7 +291,7 @@ class NuroSync {
         this.lateCount = 0;
         this.onTimeCount = 0;
         this.totalStepsEvaluated = 0;
-        this.rhythmAlignmentScore = 85.0;
+        this.rhythmAlignmentScore = null;
     }
 }
 

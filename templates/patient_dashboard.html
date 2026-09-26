@@ -278,7 +278,7 @@
                                         {% elif not session.completed %}
                                             <span class="text-muted small">In Progress</span>
                                         {% else %}
-                                            <span class="text-muted small">Completed</span>
+                                            <span class="badge bg-secondary" title="Insufficient movement data">&mdash;</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ session.initial_bpm|round|int }} - {{ session.final_bpm|round|int if session.final_bpm else session.initial_bpm|round|int }} BPM</td>
@@ -520,7 +520,7 @@ async function refreshRecentSessions() {
             } else if (!s.completed) {
                 accHtml = '<span class="text-muted small">In Progress</span>';
             } else {
-                accHtml = '<span class="text-muted small">Completed</span>';
+                accHtml = '<span class="badge bg-secondary" title="Insufficient movement data">&mdash;</span>';
             }
 
             let reportHtml = '';

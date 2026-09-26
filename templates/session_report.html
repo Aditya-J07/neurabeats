@@ -287,7 +287,11 @@
                 <div class="metric-pill-card">
                     <small class="text-muted d-block mb-1">Entrainment Accuracy</small>
                     <div class="metric-pill-value" style="color: #16a34a;">
-                        {{ accuracy_score }}%
+                        {% if accuracy_score is not none %}
+                            {{ accuracy_score }}%
+                        {% else %}
+                            <span class="text-secondary" style="font-size: 1.1rem;">Unavailable</span>
+                        {% endif %}
                     </div>
                     <small class="text-muted">Rhythm Synchronization</small>
                 </div>
@@ -315,7 +319,7 @@
                     </div>
                     <small class="text-muted">
                         {% if therapy_session.left_steps or therapy_session.right_steps %}
-                            L:{{ therapy_session.left_steps }} | R:{{ therapy_session.right_steps }} ({{ (therapy_session.gait_symmetry or 100)|round|int }}% sym)
+                            L:{{ therapy_session.left_steps }} | R:{{ therapy_session.right_steps }}{% if therapy_session.gait_symmetry is not none %} ({{ therapy_session.gait_symmetry|round|int }}% sym){% endif %}
                         {% else %}
                             Verified Cycles
                         {% endif %}
