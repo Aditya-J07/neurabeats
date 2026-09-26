@@ -15,8 +15,10 @@
  */
 
 class NuroSync {
-    constructor(toleranceMs = 250) {
-        this.toleranceMs = toleranceMs;
+    constructor(toleranceMs = null) {
+        this.currentBpm = 60;
+        this.customTolerance = toleranceMs;
+        this.toleranceMs = toleranceMs !== null ? toleranceMs : this.calculateDynamicTolerance(this.currentBpm);
         this.beatTimestamps = []; // seconds (monotonic performance.now() / 1000)
         this.stepEvents = [];
         this.signedErrors = [];   // in ms
@@ -30,18 +32,30 @@ class NuroSync {
         
         // Engineering score: Rhythm Alignment Score (0-100)
         this.rhythmAlignmentScore = 85.0;
-        this.currentBpm = 60;
+    }
+
+    calculateDynamicTolerance(bpm) {
+        const validBpm = (Number.isFinite(bpm) && bpm > 0) ? bpm : 60;
+        const beatPeriodMs = 60000.0 / validBpm;
+        return Number((beatPeriodMs * 0.20).toFixed(1));
     }
 
     setBpm(bpm) {
         if (Number.isFinite(bpm) && bpm > 0) {
             this.currentBpm = bpm;
+            if (this.customTolerance === null) {
+                this.toleranceMs = this.calculateDynamicTolerance(bpm);
+            }
         }
     }
 
     setTolerance(toleranceMs) {
         if (Number.isFinite(toleranceMs) && toleranceMs > 0) {
+            this.customTolerance = toleranceMs;
             this.toleranceMs = toleranceMs;
+        } else if (toleranceMs === null) {
+            this.customTolerance = null;
+            this.toleranceMs = this.calculateDynamicTolerance(this.currentBpm);
         }
     }
 
@@ -63,6 +77,10 @@ class NuroSync {
         const stepTime = typeof stepEvent === 'object' ? stepEvent.timestamp : stepEvent;
         if (!Number.isFinite(stepTime)) {
             return this.getInstantaneousMetrics(0, 0, 0, false);
+        }
+
+        if (this.customTolerance === null) {
+            this.toleranceMs = this.calculateDynamicTolerance(this.currentBpm);
         }
 
         this.stepEvents.push(typeof stepEvent === 'object' ? stepEvent : { timestamp: stepTime });
@@ -194,6 +212,14 @@ class NuroSync {
      */
     getCurrentAccuracy() {
         return Math.max(0, Math.min(100, Math.round(this.rhythmAlignmentScore)));
+    }
+
+    getRhythmAlignmentScore() {
+        return Math.max(0, Math.min(100, Math.round(this.rhythmAlignmentScore)));
+    }
+
+    getMetrics() {
+        return this.getMetricsSummary();
     }
 
     /**

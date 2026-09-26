@@ -14,6 +14,10 @@ export { MovementFeatureExtractor } from './core/MovementFeatures';
 export { MovementDetector } from './core/MovementDetector';
 export { CadenceEstimator } from './core/CadenceEstimator';
 export { MovementQualityEvaluator } from './core/MovementQuality';
+export { MovementIntelligence, MOVEMENT_INTELLIGENCE_CONFIG } from './core/MovementIntelligence';
+export { AdaptiveEngine, ADAPTIVE_ENGINE_CONFIG } from './core/AdaptiveEngine';
+export { NuroAgent, NuroActionValidator, NuroReasoner, NURO_AGENT_CONFIG } from './core/NuroAgent';
+export { PhaseIntelligence, CircularPhaseResolver, PhaseStateMachine, MultiSignalCycleDetector, PersonalMovementBaseline } from './core/PhaseIntelligence';
 
 export { MediaPipePoseProvider, ProviderStatus } from './providers/MediaPipePoseProvider';
 export { NuroAudio } from './audio/NuroAudio';

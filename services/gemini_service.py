@@ -384,3 +384,202 @@ def _generate_deterministic_patient_feedback(session_type: str, accuracy: float,
         return f"Wonderful work maintaining rhythm today with an alignment score of {round(accuracy)}%! Take a few minutes to rest, hydrate, and recharge before your next activity."
     else:
         return f"Great effort completing your therapy session today—consistent practice supports neural recovery! Rest comfortably before your next activity."
+
+# =========================================================================
+# P3: Nuro Agent Closed-Loop Advisory Reasoning & Session Reflection
+# =========================================================================
+
+def generate_agent_reasoning(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate structured Nuro Agent advisory reasoning from compact context (Section 12, 13).
+    Strictly non-diagnostic. Guarantees deterministic fallback on offline, timeout, or rate-limiting.
+    """
+    client = get_gemini_client()
+    if not client:
+        return _generate_deterministic_agent_reasoning(context)
+
+    from google.genai import types
+
+    prompt = f"""You are the Nuro Agent closed-loop reasoning advisor for a rhythmic neurorehabilitation session.
+Analyze the compact performance context below and recommend the next adaptive action.
+
+STRICT CONSTRAINTS:
+- Do NOT make medical diagnoses or clinical assertions.
+- Output ONLY a single valid JSON object matching the exact schema below.
+- Allowed intents: "PROGRESS", "MAINTAIN", "RECOVER", "EXPLORE", "OBSERVE".
+- Allowed targets: "TEMPO", "MOVEMENT", "REPETITIONS", "RHYTHM", "NONE".
+- Allowed actions: "INCREASE_TEMPO", "DECREASE_TEMPO", "INCREASE_MOVEMENT_TARGET", "DECREASE_MOVEMENT_TARGET", "INCREASE_REPETITIONS", "DECREASE_REPETITIONS", "MAINTAIN", "REQUEST_MORE_OBSERVATION".
+- Magnitude must be between 0.0 and 0.08.
+- Explain the reason concisely in 1 sentence focusing strictly on measured kinematics/rhythm.
+
+[CONTEXT]
+{json.dumps(context, indent=2)}
+
+[REQUIRED JSON SCHEMA]
+{{
+  "intent": "PROGRESS" | "MAINTAIN" | "RECOVER" | "EXPLORE" | "OBSERVE",
+  "target": "TEMPO" | "MOVEMENT" | "REPETITIONS" | "RHYTHM" | "NONE",
+  "action": "INCREASE_TEMPO" | "DECREASE_TEMPO" | "INCREASE_MOVEMENT_TARGET" | "DECREASE_MOVEMENT_TARGET" | "INCREASE_REPETITIONS" | "DECREASE_REPETITIONS" | "MAINTAIN" | "REQUEST_MORE_OBSERVATION",
+  "magnitude": 0.05,
+  "reason": "Brief evidence-based explanation.",
+  "confidence": 0.90
+}}
+"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=300,
+                response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_budget=0)
+            )
+        )
+        text = response.text.strip()
+        data = json.loads(text)
+        if isinstance(data, dict) and "intent" in data and "action" in data:
+            return data
+        return _generate_deterministic_agent_reasoning(context)
+    except Exception as e:
+        logging.warning(f"Nuro Agent Gemini reasoning fallback: {str(e)}")
+        return _generate_deterministic_agent_reasoning(context)
+
+def _generate_deterministic_agent_reasoning(context: Dict[str, Any]) -> Dict[str, Any]:
+    """Deterministic, transparent agent reasoning baseline."""
+    curr = context.get('current', {})
+    perf = context.get('performance', {})
+    trend = perf.get('trend', 'STABLE')
+    score = float(perf.get('score', 0.8))
+    conf = float(curr.get('confidence', 0.9))
+    r_sync = float(curr.get('rhythmSync', 0.8))
+    stability = float(perf.get('stability', 0.8))
+
+    if conf < 0.45:
+        return {
+            "intent": "OBSERVE",
+            "target": "NONE",
+            "action": "REQUEST_MORE_OBSERVATION",
+            "magnitude": 0.0,
+            "reason": "Tracking confidence is below adaptation threshold. Maintaining steady challenge.",
+            "confidence": round(conf, 2)
+        }
+
+    if (trend == "IMPROVING" or score >= 0.82) and stability >= 0.70 and score >= 0.78:
+        target = "TEMPO" if r_sync >= 0.82 else "MOVEMENT"
+        action = "INCREASE_TEMPO" if target == "TEMPO" else "INCREASE_MOVEMENT_TARGET"
+        return {
+            "intent": "PROGRESS",
+            "target": target,
+            "action": action,
+            "magnitude": 0.05,
+            "reason": f"High performance ({round(score * 100)}%) with {trend.lower()} trend and stable rhythm synchronization.",
+            "confidence": round(min(0.98, conf * 0.95), 2)
+        }
+
+    if trend == "DECLINING" or score < 0.58:
+        target = "TEMPO" if r_sync < 0.65 else "MOVEMENT"
+        action = "DECREASE_TEMPO" if target == "TEMPO" else "DECREASE_MOVEMENT_TARGET"
+        return {
+            "intent": "RECOVER",
+            "target": target,
+            "action": action,
+            "magnitude": 0.05,
+            "reason": f"Performance declined ({round(score * 100)}%) across recent windows. Adjusting challenge for motor recovery.",
+            "confidence": round(min(0.95, conf * 0.90), 2)
+        }
+
+    return {
+        "intent": "MAINTAIN",
+        "target": "NONE",
+        "action": "MAINTAIN",
+        "magnitude": 0.0,
+        "reason": f"Performance is consolidated in target zone ({round(score * 100)}%, {trend.lower()} trend).",
+        "confidence": round(min(0.95, conf * 0.92), 2)
+    }
+
+def generate_agent_session_reflection(session_summary: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate structured reflection at session completion (Section 22).
+    """
+    client = get_gemini_client()
+    if not client:
+        return _generate_deterministic_session_reflection(session_summary)
+
+    from google.genai import types
+
+    prompt = f"""You are the Nuro Agent session reflection analyst.
+Generate an end-of-session structured reflection based strictly on the measured session metrics below.
+
+STRICT CONSTRAINTS:
+- Do NOT make clinical diagnoses or claim disease remission.
+- Output ONLY valid JSON matching the exact schema below.
+- Base next session starting point on measured successful tempo.
+
+[SESSION SUMMARY]
+{json.dumps(session_summary, indent=2)}
+
+[REQUIRED JSON SCHEMA]
+{{
+  "summary": "1-2 sentence overall summary of performance trend.",
+  "strongAreas": ["area 1", "area 2"],
+  "areasToWatch": ["area 1"],
+  "successfulAdaptation": "e.g. 80 -> 84 BPM" or null,
+  "unsuccessfulAdaptation": null,
+  "nextSessionStartingPoint": 84
+}}
+"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=400,
+                response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_budget=0)
+            )
+        )
+        text = response.text.strip()
+        data = json.loads(text)
+        if isinstance(data, dict) and "summary" in data:
+            return data
+        return _generate_deterministic_session_reflection(session_summary)
+    except Exception as e:
+        logging.warning(f"Nuro Agent reflection fallback: {str(e)}")
+        return _generate_deterministic_session_reflection(session_summary)
+
+def _generate_deterministic_session_reflection(summary: Dict[str, Any]) -> Dict[str, Any]:
+    """Deterministic structured session reflection baseline."""
+    avg_sync = summary.get('averageRhythmSync', 0.8)
+    avg_qual = summary.get('averageMovementQuality', 0.8)
+    imp = summary.get('improvement', 0.0)
+    best_tempo = summary.get('bestTempo', 60)
+    succ_range = summary.get('successfulTempoRange', f"{best_tempo} BPM")
+
+    strong_areas = []
+    if avg_sync >= 0.80:
+        strong_areas.append("rhythm synchronization")
+    if avg_qual >= 0.75:
+        strong_areas.append("movement consistency")
+    if not strong_areas:
+        strong_areas.append("protocol adherence")
+
+    areas_to_watch = []
+    if avg_sync < 0.75:
+        areas_to_watch.append("rhythm alignment under fatigue")
+    if avg_qual < 0.70:
+        areas_to_watch.append("bilateral symmetry and smoothness")
+    if not areas_to_watch:
+        areas_to_watch.append("cadence stability at higher tempo")
+
+    return {
+        "summary": f"Performance showed {'an upward' if imp > 0 else 'a consolidated'} trajectory across the session with {round(avg_sync * 100)}% average rhythm synchronization.",
+        "strongAreas": strong_areas,
+        "areasToWatch": areas_to_watch,
+        "successfulAdaptation": succ_range,
+        "unsuccessfulAdaptation": None,
+        "nextSessionStartingPoint": round(best_tempo)
+    }

@@ -47,13 +47,13 @@ frontend-react/node_modules/
 .env.*
 !.env.example
 
-# Databases
-instance/*.db
-instance/*.sqlite
+# Databases & Local State
+instance/
 *.sqlite
 *.sqlite3
 *.db
-*.db-journal
+*.db*
+*.bak
 
 # IDEs & Editors
 .vscode/

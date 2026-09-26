@@ -228,7 +228,13 @@ class MeasurementService:
                 "outliers_rejected": int(quality.get('outliers_rejected', 0)),
                 "fps": float(quality.get('fps', 0.0)),
                 "latency_ms": float(quality.get('latency_ms', 0.0))
-            }
+            },
+            "movement_intelligence": telemetry.get('movement_intelligence'),
+            "adaptive_state": telemetry.get('adaptive_state'),
+            "adaptation_decision": telemetry.get('adaptation_decision'),
+            "agent_state": telemetry.get('agent_state'),
+            "agent_decision": telemetry.get('agent_decision'),
+            "agent_summary": telemetry.get('agent_summary')
         }
 
     # =========================================================================

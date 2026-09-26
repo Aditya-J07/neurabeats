@@ -172,6 +172,337 @@ class OneEuroFilter {
 }
 
 /**
+ * 2B. Velocity-Aware Adaptive Landmark Filter & Outlier Rejector
+ * Provides separate clean streams for display and measurement.
+ * - Outlier Rejection: detects sudden single-frame spatial jumps (> 0.18 normalized dist) and clamps them.
+ * - Velocity-Aware Filtering: dynamically adjusts smoothing factor alpha:
+ *     alpha = 0.68 for slow/stationary postures (eradicates sub-pixel jitter)
+ *     alpha = 0.90 for rapid intentional limb movement (prevents lag/phase delay)
+ * Preserves raw landmarks for debugging/diagnostics.
+ */
+class AdaptiveLandmarkFilter {
+    constructor(alphaMin = 0.68, alphaMax = 0.90) {
+        this.alphaMin = alphaMin;
+        this.alphaMax = alphaMax;
+        this.prevFiltered = null;
+        this.prevTime = null;
+        this.outlierCounts = new Array(33).fill(0);
+        this.latestRaw = null;
+        this.latestDisplay = null;
+        this.latestMeasurement = null;
+        this.latestJitter = 0.0;
+    }
+
+    reset() {
+        this.prevFiltered = null;
+        this.prevTime = null;
+        this.outlierCounts.fill(0);
+        this.latestRaw = null;
+        this.latestDisplay = null;
+        this.latestMeasurement = null;
+        this.latestJitter = 0.0;
+    }
+
+    filter(rawLandmarks, timestampMs) {
+        if (!rawLandmarks || rawLandmarks.length < 33) {
+            this.reset();
+            return { rawLandmarks, displayLandmarks: rawLandmarks, measurementLandmarks: rawLandmarks, jitter: 0 };
+        }
+
+        this.latestRaw = rawLandmarks;
+        const now = typeof timestampMs === 'number' ? timestampMs : performance.now();
+
+        if (!this.prevFiltered || this.prevTime === null) {
+            this.prevTime = now;
+            this.prevFiltered = rawLandmarks.map(lm => lm ? { x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility ?? 1 } : null);
+            this.latestDisplay = this.prevFiltered.map(lm => lm ? { ...lm } : null);
+            this.latestMeasurement = this.prevFiltered.map(lm => lm ? { ...lm } : null);
+            return {
+                rawLandmarks,
+                displayLandmarks: this.latestDisplay,
+                measurementLandmarks: this.latestMeasurement,
+                jitter: 0
+            };
+        }
+
+        const dt = Math.max(0.008, Math.min(0.25, (now - this.prevTime) / 1000.0));
+        this.prevTime = now;
+
+        const display = new Array(rawLandmarks.length);
+        const measurement = new Array(rawLandmarks.length);
+        let sumDisplacement = 0;
+        let countDisplacement = 0;
+
+        for (let i = 0; i < rawLandmarks.length; i++) {
+            const raw = rawLandmarks[i];
+            const prev = this.prevFiltered[i];
+
+            if (!raw || !prev) {
+                display[i] = raw ? { ...raw } : null;
+                measurement[i] = raw ? { ...raw } : null;
+                continue;
+            }
+
+            const rawVis = typeof raw.visibility === 'number' ? raw.visibility : 1.0;
+            const dx = raw.x - prev.x;
+            const dy = raw.y - prev.y;
+            const dz = (raw.z || 0) - (prev.z || 0);
+            const dist = Math.hypot(dx, dy);
+
+            // Track landmark jitter on core body landmarks (hips 23,24, knees 25,26, ankles 27,28)
+            if (i >= 23 && i <= 28) {
+                sumDisplacement += dist;
+                countDisplacement++;
+            }
+
+            // 1. Outlier Rejection Gating (Section 13)
+            // Single-frame teleportation gate: > 0.18 normalized body space in dt
+            let targetX = raw.x;
+            let targetY = raw.y;
+            let targetZ = raw.z || 0;
+
+            const maxAllowedDist = 0.18;
+            if (dist > maxAllowedDist && this.outlierCounts[i] < 2) {
+                // Outlier detected: clamp displacement vector
+                const scale = maxAllowedDist / dist;
+                targetX = prev.x + dx * scale;
+                targetY = prev.y + dy * scale;
+                targetZ = prev.z + dz * scale;
+                this.outlierCounts[i]++;
+            } else {
+                this.outlierCounts[i] = 0;
+            }
+
+            // 2. Velocity-Aware Adaptive Smoothing (Section 11, 12)
+            // Normalized velocity in screens/sec
+            const vel = dist / dt;
+            let alpha = this.alphaMin;
+            if (vel > 0.25) {
+                // Adaptive ramp: fast movement gets lighter smoothing (higher alpha)
+                const ramp = Math.min(1.0, (vel - 0.25) / 1.55);
+                alpha = this.alphaMin + (this.alphaMax - this.alphaMin) * ramp;
+            }
+
+            // Exponential low-pass filter: filtered_t = alpha * raw_t + (1 - alpha) * filtered_(t-1)
+            const filtX = alpha * targetX + (1.0 - alpha) * prev.x;
+            const filtY = alpha * targetY + (1.0 - alpha) * prev.y;
+            const filtZ = alpha * targetZ + (1.0 - alpha) * prev.z;
+
+            const filteredObj = {
+                x: filtX,
+                y: filtY,
+                z: filtZ,
+                visibility: rawVis
+            };
+
+            this.prevFiltered[i] = filteredObj;
+            display[i] = { ...filteredObj };
+            measurement[i] = { ...filteredObj };
+        }
+
+        this.latestDisplay = display;
+        this.latestMeasurement = measurement;
+        this.latestJitter = countDisplacement > 0 ? (sumDisplacement / countDisplacement) : 0;
+
+        return {
+            rawLandmarks,
+            displayLandmarks: display,
+            measurementLandmarks: measurement,
+            jitter: this.latestJitter
+        };
+    }
+
+    getDisplayLandmarks() {
+        return this.latestDisplay;
+    }
+
+    getMeasurementLandmarks() {
+        return this.latestMeasurement;
+    }
+}
+
+/**
+ * 2C. FrameDiagnosticsCollector (Sections 4, 5, 29, 30)
+ * Lightweight developer-only frame diagnostics object maintaining a bounded rolling 120-frame buffer.
+ * Calculates authoritative frame timing statistics, jitter, dropped/out-of-order frames, and temporal stability.
+ */
+class FrameDiagnosticsCollector {
+    constructor(capacity = 120) {
+        this.capacity = capacity;
+        this.frames = []; // Rolling buffer of frame telemetry records
+        this.droppedFramesCount = 0;
+        this.duplicateFramesCount = 0;
+        this.outOfOrderCount = 0;
+        this.frameGapsCount = 0;
+        this.lastCaptureTimestamp = null;
+        this.lastSummaryTime = 0;
+        this.cachedSummary = null;
+
+        // Cumulative totals
+        this.totalCaptured = 0;
+        this.totalProcessed = 0;
+    }
+
+    reset() {
+        this.frames = [];
+        this.droppedFramesCount = 0;
+        this.duplicateFramesCount = 0;
+        this.outOfOrderCount = 0;
+        this.frameGapsCount = 0;
+        this.lastCaptureTimestamp = null;
+        this.lastSummaryTime = 0;
+        this.cachedSummary = null;
+    }
+
+    recordCapture(frameId, captureTimestamp, captureDeltaMs, isFrameGap = false) {
+        this.totalCaptured++;
+        if (isFrameGap) {
+            this.frameGapsCount++;
+        }
+        this.lastCaptureTimestamp = captureTimestamp;
+    }
+
+    recordDropped(frameId, timestamp, reason = 'MUTEX_BUSY') {
+        this.droppedFramesCount++;
+    }
+
+    recordOutOfOrder(frameId, expectedFrameId) {
+        this.outOfOrderCount++;
+    }
+
+    recordDuplicate(frameId) {
+        this.duplicateFramesCount++;
+    }
+
+    recordFrameProcessed(record) {
+        this.totalProcessed++;
+        const entry = {
+            frameId: record.frameId,
+            captureTimestamp: record.captureTimestamp,
+            processingStart: record.processingStart,
+            processingEnd: record.processingEnd,
+            captureDeltaMs: record.captureDeltaMs || (record.captureTimestamp - (this.lastCaptureTimestamp || record.captureTimestamp)),
+            processingDurationMs: record.processingEnd - record.processingStart,
+            inferenceDurationMs: record.inferenceDurationMs || 0,
+            renderTimestamp: performance.now(),
+            renderDeltaMs: 0,
+            droppedFrames: this.droppedFramesCount,
+            duplicateFrames: this.duplicateFramesCount,
+            queueDepth: 0,
+            landmarkTimestamp: record.captureTimestamp,
+            resultAgeMs: record.resultAgeMs || (record.processingEnd - record.captureTimestamp),
+            landmarkJitter: record.landmarkJitter || 0
+        };
+
+        this.frames.push(entry);
+        if (this.frames.length > this.capacity) {
+            this.frames.shift();
+        }
+    }
+
+    getSummary() {
+        const now = performance.now();
+        if (now - this.lastSummaryTime < 80 && this.cachedSummary) {
+            return this.cachedSummary;
+        }
+        this.lastSummaryTime = now;
+
+        if (this.frames.length === 0) {
+            return {
+                effectiveFPS: 0,
+                meanFrameIntervalMs: 0,
+                medianFrameIntervalMs: 0,
+                p95FrameIntervalMs: 0,
+                maxFrameIntervalMs: 0,
+                frameTimingJitterMs: 0,
+                inferenceDurationMs: 0,
+                resultAgeMs: 0,
+                landmarkJitter: 0,
+                droppedFrames: this.droppedFramesCount,
+                duplicateFrames: this.duplicateFramesCount,
+                outOfOrderCount: this.outOfOrderCount,
+                temporalStability: 1.0
+            };
+        }
+
+        const intervals = [];
+        const inferences = [];
+        const resultAges = [];
+        const jitters = [];
+
+        for (let i = 1; i < this.frames.length; i++) {
+            const dt = this.frames[i].captureTimestamp - this.frames[i - 1].captureTimestamp;
+            if (dt > 0 && dt < 500) {
+                intervals.push(dt);
+            }
+        }
+        for (const f of this.frames) {
+            if (f.inferenceDurationMs > 0) inferences.push(f.inferenceDurationMs);
+            if (f.resultAgeMs > 0) resultAges.push(f.resultAgeMs);
+            if (f.landmarkJitter > 0) jitters.push(f.landmarkJitter);
+        }
+
+        const mean = (arr) => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+        const median = (arr) => {
+            if (arr.length === 0) return 0;
+            const s = [...arr].sort((a, b) => a - b);
+            const m = Math.floor(s.length / 2);
+            return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+        };
+        const p95 = (arr) => {
+            if (arr.length === 0) return 0;
+            const s = [...arr].sort((a, b) => a - b);
+            const idx = Math.min(s.length - 1, Math.floor(s.length * 0.95));
+            return s[idx];
+        };
+        const stdDev = (arr, m) => {
+            if (arr.length < 2) return 0;
+            const v = arr.reduce((acc, val) => acc + Math.pow(val - m, 2), 0) / (arr.length - 1);
+            return Math.sqrt(v);
+        };
+
+        const meanInterval = mean(intervals);
+        const medInterval = median(intervals);
+        const p95Interval = p95(intervals);
+        const maxInterval = intervals.length > 0 ? Math.max(...intervals) : 0;
+        const timingJitter = stdDev(intervals, meanInterval);
+
+        const meanInference = mean(inferences);
+        const meanAge = mean(resultAges);
+        const ageVariance = stdDev(resultAges, meanAge);
+        const meanLandmarkJitter = mean(jitters);
+
+        const effectiveFPS = meanInterval > 0 ? (1000.0 / meanInterval) : 0;
+
+        // Developer-only Temporal Stability Score (Section 30)
+        // temporalStability = 1 - normalized(landmarkJitter + frameTimingJitter + resultAgeVariance)
+        const normJitter = Math.min(1.0, meanLandmarkJitter / 0.04);
+        const normTimingJitter = Math.min(1.0, timingJitter / 25.0);
+        const normAgeVar = Math.min(1.0, ageVariance / 40.0);
+        const penalty = (0.35 * normJitter) + (0.40 * normTimingJitter) + (0.25 * normAgeVar);
+        const temporalStability = Number(Math.max(0.0, Math.min(1.0, 1.0 - penalty)).toFixed(2));
+
+        this.cachedSummary = {
+            effectiveFPS: Number(effectiveFPS.toFixed(1)),
+            meanFrameIntervalMs: Number(meanInterval.toFixed(1)),
+            medianFrameIntervalMs: Number(medInterval.toFixed(1)),
+            p95FrameIntervalMs: Number(p95Interval.toFixed(1)),
+            maxFrameIntervalMs: Number(maxInterval.toFixed(1)),
+            frameTimingJitterMs: Number(timingJitter.toFixed(1)),
+            inferenceDurationMs: Number(meanInference.toFixed(1)),
+            resultAgeMs: Number(meanAge.toFixed(1)),
+            landmarkJitter: Number(meanLandmarkJitter.toFixed(4)),
+            droppedFrames: this.droppedFramesCount,
+            duplicateFrames: this.duplicateFramesCount,
+            outOfOrderCount: this.outOfOrderCount,
+            temporalStability
+        };
+
+        return this.cachedSummary;
+    }
+}
+
+/**
  * 3. Pose Quality Gate
  * Evaluates 10 critical gait landmarks, lower-body completeness, framing, and feet truncation.
  */
@@ -725,6 +1056,19 @@ class LegKinematicsTracker {
         this.cadenceEstimator = new CadenceEstimator();
         this.symmetryCalculator = new GaitSymmetryCalculator();
         this.balanceEvaluator = new BalanceKinematicsEvaluator();
+        this.adaptiveFilter = new AdaptiveLandmarkFilter();
+        this.diagnostics = new FrameDiagnosticsCollector();
+        window.frameDiagnostics = this.diagnostics;
+
+        // Frame timing & synchronization contract (Sections 7, 8, 9, 10)
+        this.latestAcceptedFrameId = -1;
+        this.latestPoseTimestamp = 0;
+        this.inFlightFrameId = null;
+        this.inFlightTimestamp = null;
+        this.inFlightStart = 0;
+        this.internalFrameCounter = 0;
+        this.latestQuality = null;
+        this.lastUiUpdateTime = 0;
 
         // 1 Euro Filters for key joints (X, Y)
         this.filters = {
@@ -832,27 +1176,43 @@ class LegKinematicsTracker {
                 }
             }
 
-            if (this.cameraStage) {
-                this.cameraStage.style.setProperty('--camera-aspect-ratio', `${vW} / ${vH}`);
+            if (this.renderRect.videoWidth !== vW || this.renderRect.videoHeight !== vH) {
+                if (this.cameraStage) {
+                    this.cameraStage.style.setProperty('--camera-aspect-ratio', `${vW} / ${vH}`);
+                }
+                this.renderRect.videoWidth = vW;
+                this.renderRect.videoHeight = vH;
+                this.renderRect.width = vW;
+                this.renderRect.height = vH;
             }
-
-            this.renderRect.videoWidth = vW;
-            this.renderRect.videoHeight = vH;
-            this.renderRect.width = vW;
-            this.renderRect.height = vH;
         }
     }
 
     handlePoseResults(results) {
-        this.latestResults = results;
+        const arrivalTime = performance.now();
+        const fId = this.inFlightFrameId;
+        const tMs = this.inFlightTimestamp;
+
         this.isProcessing = false;
-        const now = performance.now();
-        this.latencyMs = Number((now - this.lastFrameTime).toFixed(1));
+
+        // Prevent Out-Of-Order Results (Section 8)
+        if (typeof fId === 'number' && fId < this.latestAcceptedFrameId) {
+            if (this.diagnostics) {
+                this.diagnostics.recordOutOfOrder(fId, this.latestAcceptedFrameId);
+            }
+            return;
+        }
+
+        this.latestAcceptedFrameId = fId;
+        this.latestPoseTimestamp = tMs || arrivalTime;
+        this.latestResults = results;
+
+        this.latencyMs = Number((arrivalTime - (this.inFlightStart || arrivalTime)).toFixed(1));
         this.frameCount++;
         if (this.frameCount % 10 === 0) {
             this.fps = Number((1000.0 / Math.max(1, this.latencyMs)).toFixed(1));
         }
-        this.lastFrameTime = now;
+        this.lastFrameTime = arrivalTime;
     }
 
     /**
@@ -864,47 +1224,121 @@ class LegKinematicsTracker {
 
     /**
      * Estimates anatomical movement & landmarks based on active mode
+     * Complies with Section 8 (no out-of-order), Section 9 (single in-flight), Section 10 (no stale frames),
+     * Section 11/12 (velocity-aware adaptive filtering), Section 13 (outlier rejection), Section 15 (display vs measurement).
      */
-    async estimatePose(videoEl) {
+    async estimatePose(videoEl, frameId = null, timestampMs = null) {
         if (!videoEl || videoEl.readyState < 2) return null;
 
-        if (this.isModelLoaded && this.poseModel && !this.isProcessing) {
+        const processingStart = performance.now();
+        const fId = typeof frameId === 'number' ? frameId : ++this.internalFrameCounter;
+        const tMs = typeof timestampMs === 'number' ? timestampMs : performance.now();
+
+        // 1. Single In-Flight Inference check (Section 9)
+        if (this.isProcessing) {
+            if (this.diagnostics) {
+                this.diagnostics.recordDropped(fId, tMs, 'INFERENCE_BUSY');
+            }
+            return {
+                isNewResult: false,
+                qualityPassed: this.latestQuality ? this.latestQuality.passed : false,
+                confidence: this.latestQuality ? this.latestQuality.confidence : 0,
+                resultAgeMs: Number((tMs - this.latestPoseTimestamp).toFixed(1))
+            };
+        }
+
+        if (this.isModelLoaded && this.poseModel) {
             this.isProcessing = true;
+            this.inFlightFrameId = fId;
+            this.inFlightTimestamp = tMs;
+            this.inFlightStart = processingStart;
+
             try {
                 await this.poseModel.send({ image: videoEl });
             } catch (e) {
+                console.warn('[POSE_INFERENCE] Error sending frame to model:', e);
                 this.isProcessing = false;
+                return null;
             }
         }
 
-        const now = performance.now();
         const results = this.latestResults;
-
-        if (results && results.poseLandmarks && results.poseLandmarks.length >= 33) {
-            const rawLm = results.poseLandmarks;
-
-            // 1. Run Pose Quality Gate
-            const quality = this.qualityGate.evaluate(rawLm, now);
-            this.updateQualityBanner(quality);
-
-            // 2. Draw Skeleton with unified stage transform
-            this.drawSkeletonOverlay(rawLm);
-
-            if (!quality.passed) {
-                return { qualityPassed: false, confidence: 0 };
-            }
-
-            // 3. Body Normalization & Filtering
-            const normCoords = this.normalizeAndFilter(rawLm, now);
-
-            if (this.trackingMode === 'balance') {
-                return this.processBalanceKinematics(rawLm, now);
-            } else {
-                return this.processGaitKinematics(normCoords, rawLm, now, quality.confidence);
-            }
+        if (!results || !results.poseLandmarks || results.poseLandmarks.length < 33) {
+            return null;
         }
 
-        return null;
+        // Verify this is a new result matching this frame
+        if (this.latestAcceptedFrameId !== fId) {
+            return {
+                isNewResult: false,
+                qualityPassed: false,
+                confidence: 0,
+                resultAgeMs: Number((tMs - this.latestPoseTimestamp).toFixed(1))
+            };
+        }
+
+        const rawLm = results.poseLandmarks;
+        const now = tMs;
+
+        // 1. Run Pose Quality Gate
+        const quality = this.qualityGate.evaluate(rawLm, now);
+        this.latestQuality = quality;
+        this.updateQualityBanner(quality);
+
+        // 2. Adaptive Landmark Filtering (Velocity-Aware + Outlier Rejection)
+        const filterResult = this.adaptiveFilter.filter(rawLm, now);
+        const displayLm = filterResult.displayLandmarks;
+        const measurementLm = filterResult.measurementLandmarks;
+
+        // 3. Draw Skeleton Overlay using display landmarks
+        this.drawSkeletonOverlay(displayLm);
+
+        const processingEnd = performance.now();
+        const inferenceDurationMs = processingEnd - processingStart;
+
+        if (this.diagnostics) {
+            this.diagnostics.recordFrameProcessed({
+                frameId: fId,
+                captureTimestamp: tMs,
+                processingStart,
+                processingEnd,
+                inferenceDurationMs,
+                resultAgeMs: processingEnd - tMs,
+                landmarkJitter: filterResult.jitter
+            });
+        }
+
+        if (!quality.passed) {
+            return {
+                isNewResult: true,
+                qualityPassed: false,
+                confidence: 0,
+                rawLandmarks: rawLm,
+                measurementLandmarks: measurementLm,
+                displayLandmarks: displayLm,
+                resultAgeMs: Number((processingEnd - tMs).toFixed(1))
+            };
+        }
+
+        // 4. Body Normalization & Kinematics using measurement landmarks
+        const normCoords = this.normalizeAndFilter(measurementLm, now);
+
+        let kinematicsResult = null;
+        if (this.trackingMode === 'balance') {
+            kinematicsResult = this.processBalanceKinematics(measurementLm, now);
+        } else {
+            kinematicsResult = this.processGaitKinematics(normCoords, measurementLm, now, quality.confidence);
+        }
+
+        return {
+            ...kinematicsResult,
+            isNewResult: true,
+            qualityPassed: true,
+            rawLandmarks: rawLm,
+            measurementLandmarks: measurementLm,
+            displayLandmarks: displayLm,
+            resultAgeMs: Number((processingEnd - tMs).toFixed(1))
+        };
     }
 
     /**
@@ -1188,6 +1622,16 @@ class LegKinematicsTracker {
     updateLegUI(data) {
         if (this.trackingMode === 'balance') return;
 
+        // Throttle DOM mutations to ~10 FPS (100ms) unless stepping state changes
+        const now = performance.now();
+        const stepStateChanged = (data.isLeftStepping !== this._lastLeftStepping) || (data.isRightStepping !== this._lastRightStepping);
+        if (!stepStateChanged && (now - this.lastUiUpdateTime < 100)) {
+            return;
+        }
+        this.lastUiUpdateTime = now;
+        this._lastLeftStepping = data.isLeftStepping;
+        this._lastRightStepping = data.isRightStepping;
+
         const leftBadge = document.getElementById('leftLegBadge');
         const leftState = document.getElementById('leftLegState');
         const rightBadge = document.getElementById('rightLegBadge');
@@ -1235,6 +1679,10 @@ class LegKinematicsTracker {
     }
 
     updateBalanceUI(data) {
+        const now = performance.now();
+        if (now - this.lastUiUpdateTime < 100) return;
+        this.lastUiUpdateTime = now;
+
         const leftBadge = document.getElementById('leftLegBadge');
         const rightBadge = document.getElementById('rightLegBadge');
         const stabilityVal = document.getElementById('gaitSymmetryValue');
@@ -1282,6 +1730,7 @@ class LegKinematicsTracker {
             this.stepDetector.rightDuration
         );
         const syncMetrics = window.nuroSync ? window.nuroSync.getMetricsSummary() : null;
+        const diagSummary = this.diagnostics ? this.diagnostics.getSummary() : null;
 
         return {
             schema_version: "2.0",
@@ -1293,9 +1742,11 @@ class LegKinematicsTracker {
                 confidence: qualityCoverage,
                 tracking_coverage: qualityCoverage,
                 critical_landmark_coverage: criticalCoverage,
-                fps: this.fps,
-                latency_ms: this.latencyMs,
-                outliers_rejected: this.stepDetector.rejectedCandidates
+                fps: diagSummary ? diagSummary.effectiveFPS : this.fps,
+                latency_ms: diagSummary ? diagSummary.inferenceDurationMs : this.latencyMs,
+                outliers_rejected: this.stepDetector.rejectedCandidates,
+                dropped_frames: diagSummary ? diagSummary.droppedFrames : 0,
+                temporal_stability: diagSummary ? diagSummary.temporalStability : 1.0
             },
             gait: {
                 valid: cadence.valid,
@@ -1319,7 +1770,13 @@ class LegKinematicsTracker {
             sync: syncMetrics || {
                 valid: false,
                 rhythm_alignment_score: 85
-            }
+            },
+            movement_intelligence: window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null),
+            adaptive_state: window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null),
+            adaptation_decision: window.adaptiveEngine && typeof window.adaptiveEngine.getLastDecision === 'function' ? window.adaptiveEngine.getLastDecision() : null,
+            agent_state: window.latestAgentState || (window.nuroAgent && typeof window.nuroAgent.getCurrentState === 'function' ? window.nuroAgent.getCurrentState() : null),
+            agent_decision: window.nuroAgent && typeof window.nuroAgent.getCurrentReasoning === 'function' ? window.nuroAgent.getCurrentReasoning() : null,
+            agent_summary: window.nuroAgent && typeof window.nuroAgent.generateSessionSummary === 'function' ? window.nuroAgent.generateSessionSummary() : null
         };
     }
 
@@ -1341,7 +1798,50 @@ class LegKinematicsTracker {
         });
     }
 
+    getDiagnostics() {
+        const qualityCoverage = this.qualityGate ? this.qualityGate.getCoverage() : 1.0;
+        const criticalCoverage = this.qualityGate ? this.qualityGate.getCriticalCoverage() : 1.0;
+        let qualityState = 'EXCELLENT';
+        if (qualityCoverage < 0.6) qualityState = 'FAIR';
+        if (qualityCoverage < 0.3) qualityState = 'POOR';
+
+        const summary = this.diagnostics ? this.diagnostics.getSummary() : null;
+
+        return {
+            fps: summary ? summary.effectiveFPS : (this.fps || 30),
+            latency_ms: summary ? summary.inferenceDurationMs : (this.latencyMs || 15),
+            tracking_coverage: qualityCoverage,
+            critical_landmark_coverage: criticalCoverage,
+            valid_steps: this.stepDetector ? (this.stepDetector.leftStepsCount + this.stepDetector.rightStepsCount) : 0,
+            rejected_step_candidates: this.stepDetector ? this.stepDetector.rejectedCandidates : 0,
+            quality_state: qualityState,
+            // Telemetry & frame diagnostics (Sections 4, 5, 29, 30)
+            effective_fps: summary ? summary.effectiveFPS : (this.fps || 30),
+            frame_interval_ms: summary ? summary.meanFrameIntervalMs : 33.3,
+            frame_timing_jitter_ms: summary ? summary.frameTimingJitterMs : 0,
+            inference_duration_ms: summary ? summary.inferenceDurationMs : (this.latencyMs || 15),
+            result_age_ms: summary ? summary.resultAgeMs : 0,
+            landmark_jitter: summary ? summary.landmarkJitter : 0,
+            dropped_frames: summary ? summary.droppedFrames : 0,
+            duplicate_frames: summary ? summary.duplicateFrames : 0,
+            out_of_order_count: summary ? summary.outOfOrderCount : 0,
+            temporal_stability: summary ? summary.temporalStability : 1.0
+        };
+    }
+
     reset() {
+        if (this.diagnostics) this.diagnostics.reset();
+        if (this.adaptiveFilter) this.adaptiveFilter.reset();
+        this.latestAcceptedFrameId = -1;
+        this.latestPoseTimestamp = 0;
+        this.inFlightFrameId = null;
+        this.inFlightTimestamp = null;
+        this.inFlightStart = 0;
+        this.isInferenceInFlight = false;
+        this.internalFrameCounter = 0;
+        this.latestQuality = null;
+        this.lastUiUpdateTime = 0;
+
         this.stepDetector.reset();
         this.symmetryCalculator.reset();
         this.balanceEvaluator.reset();
@@ -1349,6 +1849,19 @@ class LegKinematicsTracker {
         Object.values(this.filters).forEach(f => f.reset());
         this.averageSymmetry = 100;
         this.balanceStabilityScore = 100;
+
+        if (window.movementIntelligence && typeof window.movementIntelligence.reset === 'function') {
+            window.movementIntelligence.reset();
+        }
+        if (window.p4PhaseIntelligence && typeof window.p4PhaseIntelligence.reset === 'function') {
+            window.p4PhaseIntelligence.reset();
+        }
+        if (window.adaptiveEngine && typeof window.adaptiveEngine.reset === 'function') {
+            window.adaptiveEngine.reset();
+        }
+        if (window.nuroAgent && typeof window.nuroAgent.reset === 'function') {
+            window.nuroAgent.reset();
+        }
 
         if (this.overlayCanvas && this.overlayCtx) {
             this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
@@ -1387,12 +1900,79 @@ const legTrackerInstance = new LegKinematicsTracker();
 window.legTracker = legTrackerInstance;
 window.transformLandmarkToCanvas = transformLandmarkToCanvas;
 
-async function runFusedLegTracking(diffScore) {
+// Track last evaluation timestamps for P2/P3 to enforce window-level execution (Section 26)
+let lastP2EvaluationSec = 0;
+let lastP3ObservationSec = 0;
+
+async function runFusedLegTracking(diffScore, frameId = null, captureTimestampMs = null) {
     const videoElement = document.getElementById('cameraFeed');
     if (!videoElement || videoElement.readyState < 2) return;
 
+    const fId = typeof frameId === 'number' ? frameId : ++legTrackerInstance.internalFrameCounter;
+    const captureMs = typeof captureTimestampMs === 'number' ? captureTimestampMs : performance.now();
+    const captureSec = captureMs / 1000.0;
+
     try {
-        const poseResults = await legTrackerInstance.estimatePose(videoElement);
+        const poseResults = await legTrackerInstance.estimatePose(videoElement, fId, captureMs);
+
+        // Movement Intelligence P1: Process ONLY when new valid pose result is returned (Section 9 & 10)
+        if (poseResults && poseResults.isNewResult && window.movementIntelligence) {
+            const measurementLandmarks = poseResults.measurementLandmarks;
+            const miState = window.movementIntelligence.processFrame(
+                measurementLandmarks,
+                diffScore,
+                captureSec,
+                window.nuroSync,
+                fId
+            );
+            window.latestMovementState = miState;
+
+            // Learned Temporal Motion Intelligence P4: Continuous Phase & Cycle Tracking
+            if (window.p4PhaseIntelligence) {
+                const currentBpm = (typeof sessionData !== 'undefined' && sessionData.currentBPM)
+                    ? sessionData.currentBPM
+                    : (window.nuroSync ? window.nuroSync.currentBpm : 60);
+
+                const prevCapture = legTrackerInstance.lastCaptureMs || (captureMs - 33.33);
+                const deltaMs = Math.max(1.0, captureMs - prevCapture);
+                legTrackerInstance.lastCaptureMs = captureMs;
+
+                const p4Observation = {
+                    frameId: fId,
+                    captureTimestampMs: captureMs,
+                    deltaTimeMs: deltaMs,
+                    landmarks: measurementLandmarks,
+                    landmarkConfidence: miState.confidence || 0.9,
+                    bodyScale: legTrackerInstance.smoothedScale || 1.0,
+                    movementState: miState.state || 'ACTIVE',
+                    bpm: currentBpm,
+                    isNewPoseResult: true
+                };
+
+                const p4State = window.p4PhaseIntelligence.processObservation(p4Observation);
+                if (p4State) {
+                    window.latestP4State = p4State;
+                    miState.temporal = p4State;
+                }
+            }
+
+            // Adaptive Intelligence P2: Enforce Window-Level Evaluation (Section 26 - at least 1.0s interval)
+            if (window.adaptiveEngine && (captureSec - lastP2EvaluationSec >= 1.0)) {
+                lastP2EvaluationSec = captureSec;
+                const currentBpm = (typeof sessionData !== 'undefined' && sessionData.currentBPM)
+                    ? sessionData.currentBPM
+                    : (window.nuroSync ? window.nuroSync.currentBpm : 60);
+                const adaptiveState = window.adaptiveEngine.evaluate(miState, currentBpm, captureSec);
+                window.latestAdaptiveState = adaptiveState;
+            }
+
+            // Nuro Agent P3: Enforce Window-Level Observation (Section 26 - at least 2.0s interval)
+            if (window.nuroAgent && window.latestAdaptiveState && (captureSec - lastP3ObservationSec >= 2.0)) {
+                lastP3ObservationSec = captureSec;
+                const agentState = window.nuroAgent.observe(miState, window.latestAdaptiveState, captureSec);
+                window.latestAgentState = agentState;
+            }
+        }
 
         if (diffScore < MOTION_THRESHOLD) {
             if (legTrackerInstance.trackingMode === 'gait') {

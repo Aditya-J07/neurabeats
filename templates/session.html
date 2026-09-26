@@ -183,6 +183,22 @@
                                             <span class="text-white"><span id="diagPoseFps">0</span> FPS (<span id="diagLatency">0</span> ms)</span>
                                         </div>
                                         <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Capture / Jitter:</span>
+                                            <span class="text-white"><span id="diagEffectiveFps">0</span> FPS (<span id="diagFrameTimingJitter">0.0</span> ms σ)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Result Age / Drops:</span>
+                                            <span class="text-white"><span id="diagResultAge">0</span> ms (<span id="diagDroppedFrames">0</span> drop / <span id="diagOutOfOrder">0</span> ooo)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Temporal Stability:</span>
+                                            <span class="text-success fw-bold" id="diagTemporalStability">1.00</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Kinematics Jerk (R/F):</span>
+                                            <span class="text-white"><span id="diagRawJerk">0.0</span> / <span id="diagFilteredJerk">0.0</span></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
                                             <span>Tracking Coverage:</span>
                                             <span class="text-white" id="diagTrackingCoverage">0%</span>
                                         </div>
@@ -193,6 +209,79 @@
                                         <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
                                             <span>Valid / Rejected Steps:</span>
                                             <span class="text-white"><span id="diagValidSteps">0</span> / <span id="diagRejectedSteps">0</span></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Movement State:</span>
+                                            <span class="badge bg-secondary" id="diagMovementState">IDLE</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Movement Quality:</span>
+                                            <span class="text-info" id="diagMovementQuality">0%</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Smoothness / Sym:</span>
+                                            <span class="text-white"><span id="diagSmoothness">0.00</span> / <span id="diagSymmetry">1.00</span></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>ROM / Consistency:</span>
+                                            <span class="text-white"><span id="diagRom">0.00</span> / <span id="diagConsistency">0.00</span></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Rhythm Sync / Error:</span>
+                                            <span class="text-white"><span id="diagRhythmSync">0%</span> (<span id="diagTimingError">0</span> ms)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Confidence:</span>
+                                            <span class="text-white" id="diagConfidence">0%</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Adaptive State:</span>
+                                            <span class="badge bg-secondary" id="diagAdaptiveDirection">MAINTAIN</span>
+                                        </div>
+                                        <!-- P4 Continuous Phase & Temporal Motion Intelligence -->
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary" style="background: rgba(1, 170, 197, 0.08); padding: 2px 4px; border-radius: 4px;">
+                                            <span style="color: #38bdf8;">P4 Phase State:</span>
+                                            <span class="badge bg-info text-dark" id="diagP4PhaseState">IDLE</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>P4 Phase / Velocity:</span>
+                                            <span class="text-white"><span id="diagP4PhaseNorm">0%</span> (<span id="diagP4PhaseVel">0.00</span> rad/s)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>P4 Cycle (Idx / Dur):</span>
+                                            <span class="text-white"><span id="diagP4CycleIndex">0</span> reps (<span id="diagP4CycleDuration">0</span> ms)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>P4 Personal Baseline:</span>
+                                            <span class="text-white" id="diagP4BaselineDev">Calibrating...</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>P4 Perception Source:</span>
+                                            <span class="text-white" id="diagP4Source">TCN / EDGE</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Difficulty / Tempo:</span>
+                                            <span class="text-white"><span id="diagAdaptiveDifficulty">0.50</span> (<span id="diagAdaptiveTempo">60</span> BPM)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Next Target (ROM / Reps):</span>
+                                            <span class="text-white"><span id="diagTargetRom">70%</span> / <span id="diagTargetReps">10</span> reps</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Adapt Reason:</span>
+                                            <span class="text-info text-truncate" id="diagAdaptiveReason" style="max-width: 190px; font-size: 0.65rem;" title="Observing baseline">Observing baseline</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Agent Intent / Mode:</span>
+                                            <span class="badge bg-secondary" id="diagAgentMode">OBSERVE</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Perf Index / Trend:</span>
+                                            <span class="text-white"><span id="diagPerfIndex">--%</span> (<span id="diagPerfTrend">STABLE</span>)</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-bottom pb-1 mb-1 border-secondary">
+                                            <span>Last Causal Outcome:</span>
+                                            <span class="text-info" id="diagLastOutcome">NONE</span>
                                         </div>
                                         <div class="d-flex justify-content-between">
                                             <span>Telemetry Schema:</span>
@@ -484,6 +573,82 @@
                     </div>
                 </div>
                 <canvas id="bpmChart" width="400" height="180"></canvas>
+        <!-- Nuro Intelligence & Closed-Loop Reasoning Panel (P3) -->
+        <div class="card mt-4 border-0 shadow-sm" style="background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95)); color: #f8fafc; border-left: 4px solid #01aac5 !important; border-radius: 12px;">
+            <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pb-1 pt-3 px-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width: 28px; height: 28px; background: rgba(1, 170, 197, 0.2); color: #01aac5;">
+                        <i data-feather="cpu" style="width: 16px; height: 16px;"></i>
+                    </div>
+                    <span class="fw-bold" style="letter-spacing: 0.5px; font-size: 0.95rem;">NURO INTELLIGENCE</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.72rem; border-color: rgba(1, 170, 197, 0.4);" onclick="toggleDemoMode()" id="btnDemoModeToggle" title="Interactive demo scenario walkthrough">
+                        <i data-feather="play-circle" style="width: 11px; height: 11px; vertical-align: -1px;"></i> Demo Walkthrough
+                    </button>
+                    <span class="badge bg-secondary" id="agentStateBadge" style="font-size: 0.7rem;">OBSERVING</span>
+                </div>
+            </div>
+            <div class="card-body px-3 py-2">
+                <!-- Live Performance Metrics Row -->
+                <div class="row g-2 text-center mb-3">
+                    <div class="col-3">
+                        <div class="p-2 rounded" style="background: rgba(255, 255, 255, 0.05);">
+                            <div class="text-muted small" style="font-size: 0.7rem;">Performance</div>
+                            <div class="fw-bold" id="agentPerfIndex" style="color: #38bdf8; font-size: 1.05rem;">--%</div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="p-2 rounded" style="background: rgba(255, 255, 255, 0.05);">
+                            <div class="text-muted small" style="font-size: 0.7rem;">Rhythm Sync</div>
+                            <div class="fw-bold text-white" id="agentRhythmSync" style="font-size: 1.05rem;">--%</div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="p-2 rounded" style="background: rgba(255, 255, 255, 0.05);">
+                            <div class="text-muted small" style="font-size: 0.7rem;">Confidence</div>
+                            <div class="fw-bold text-white" id="agentConfidence" style="font-size: 1.05rem;">--%</div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="p-2 rounded" style="background: rgba(255, 255, 255, 0.05);">
+                            <div class="text-muted small" style="font-size: 0.7rem;">Stability</div>
+                            <div class="fw-bold" id="agentStability" style="color: #34d399; font-size: 1.05rem;">--%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decision & Rationale Card -->
+                <div class="p-2 rounded mb-2" style="background: rgba(1, 170, 197, 0.08); border: 1px solid rgba(1, 170, 197, 0.2);">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small fw-semibold" style="color: #38bdf8; font-size: 0.72rem;">Nuro Decision:</span>
+                        <span class="badge" id="agentDecisionBadge" style="background: rgba(14, 165, 233, 0.25); color: #38bdf8; font-size: 0.7rem;">MAINTAIN</span>
+                    </div>
+                    <div class="small fw-semibold text-white mb-1" id="agentDecisionTitle" style="font-size: 0.82rem;">Observing baseline movement kinematics</div>
+                    <div class="text-muted" style="font-size: 0.75rem; line-height: 1.35;" id="agentDecisionReason">System initialized. Awaiting evaluation windows to consolidate performance profile.</div>
+                </div>
+
+                <!-- Current Hypothesis Card -->
+                <div class="p-2 rounded mb-2" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small text-muted" style="font-size: 0.68rem;">Active Working Hypothesis:</span>
+                        <span class="badge bg-dark text-info" id="agentHypothesisStatus" style="font-size: 0.65rem;">FORMED</span>
+                    </div>
+                    <div class="text-light small fst-italic" id="agentHypothesisText" style="font-size: 0.75rem;">
+                        "Baseline movement pattern stable under initial auditory pacing."
+                    </div>
+                </div>
+
+                <!-- Live Agent Event Timeline -->
+                <div class="mt-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-uppercase small text-muted fw-semibold" style="font-size: 0.68rem;">Live Agent Timeline:</span>
+                        <span class="text-muted" style="font-size: 0.65rem;" id="agentTimelineCount">0 events</span>
+                    </div>
+                    <div class="timeline-container p-2 rounded" id="agentTimelineContainer" style="background: rgba(0, 0, 0, 0.3); max-height: 110px; overflow-y: auto; font-family: monospace; font-size: 0.68rem;">
+                        <div class="text-muted text-center py-1">Awaiting session events...</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -494,6 +659,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='js/audio.js') }}"></script>
 <script src="{{ url_for('static', filename='js/nuro_sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/movement_intelligence.js') }}"></script>
+<script src="{{ url_for('static', filename='js/p4_phase_intelligence.js') }}"></script>
+<script src="{{ url_for('static', filename='js/adaptive_engine.js') }}"></script>
+<script src="{{ url_for('static', filename='js/nuro_agent.js') }}"></script>
 <script src="{{ url_for('static', filename='js/leg_tracker.js') }}"></script>
 <script src="{{ url_for('static', filename='js/session.js') }}"></script>
 <script>
@@ -525,13 +694,27 @@ let sessionData = {
     averageSymmetry: 100
 };
 
-let sessionTimer = null;
-let updateInterval = null;
-let voiceUpdateInterval = null;
 let chart = null;
 
 // ==================================================
-// Finger Tapping Tactile State
+// Load Persistent Patient Performance Envelope & Session Linking
+// ==================================================
+const initialEnvelope = {{ performance_envelope|tojson if performance_envelope else 'null' }};
+if (initialEnvelope && window.nuroAgent && typeof window.nuroAgent.setPersonalEnvelope === 'function') {
+    window.nuroAgent.setPersonalEnvelope(initialEnvelope);
+    console.log('[SESSION] Initialized NuroAgent with persistent personal envelope:', initialEnvelope);
+}
+if (window.nuroAgent) {
+    window.nuroAgent.sessionId = sessionData.id;
+}
+
+// ==================================================
+// Session Active Timing & Idle State Tracking
+// ==================================================
+let pausedAt = null;
+let totalPausedTime = 0; // Cumulative paused time in milliseconds
+let isUserIdle = false;  // Presentation state for zero movement
+
 // ==================================================
 // Finger Tapping Tactile State
 // ==================================================
@@ -623,10 +806,14 @@ function onSpacebarTap(e) {
 // Camera Lifecycle Management (Mode-Driven)
 // ==================================================
 let cameraStream = null;
-let cameraProcessingInterval = null;
+let cameraRvfcHandle = null;
+let cameraAnimFrameId = null;
+let isProcessingCameraFrame = false;
 let lastFrameData = null;
 let motionHistory = [];
 let isCameraActive = false;
+let internalCameraFrameId = 0;
+let lastCameraUiUpdateMs = 0;
 
 async function enableCamera() {
     // Mode Gate: NEVER initialize camera for finger tapping or speech rhythm
@@ -768,10 +955,7 @@ function stopCamera() {
         console.log('[CAMERA_STOP] Camera stream stopped and released.');
     }
 
-    if (cameraProcessingInterval) {
-        clearInterval(cameraProcessingInterval);
-        cameraProcessingInterval = null;
-    }
+    cancelScheduledCameraFrame();
 
     isCameraActive = false;
     sessionData.cameraEnabled = false;
@@ -843,24 +1027,58 @@ window.addEventListener('pagehide', stopCamera);
 // ==================================================
 // Local Browser Frame Processing & Dual-Layer Fusion
 // ==================================================
+function scheduleNextCameraFrame() {
+    if (!sessionData.isRunning || !isCameraActive || !cameraRequired(sessionData.sessionType)) return;
+
+    const videoEl = document.getElementById('cameraFeed');
+    if (!videoEl) return;
+
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        cameraRvfcHandle = videoEl.requestVideoFrameCallback((now, metadata) => {
+            cameraRvfcHandle = null;
+            processCameraFrame(now, metadata);
+        });
+    } else {
+        cameraAnimFrameId = requestAnimationFrame((now) => {
+            cameraAnimFrameId = null;
+            processCameraFrame(now);
+        });
+    }
+}
+
+function cancelScheduledCameraFrame() {
+    const videoEl = document.getElementById('cameraFeed');
+    if (cameraRvfcHandle !== null && videoEl && 'cancelVideoFrameCallback' in videoEl) {
+        try {
+            videoEl.cancelVideoFrameCallback(cameraRvfcHandle);
+        } catch (e) {
+            console.warn('Error cancelling video frame callback:', e);
+        }
+        cameraRvfcHandle = null;
+    }
+    if (cameraAnimFrameId !== null) {
+        cancelAnimationFrame(cameraAnimFrameId);
+        cameraAnimFrameId = null;
+    }
+}
+
 function startCameraProcessing() {
     if (!cameraRequired(sessionData.sessionType)) return;
-    if (!isCameraActive || cameraProcessingInterval) return;
+    if (!isCameraActive) return;
 
-    cameraProcessingInterval = setInterval(processCameraFrame, 100);
+    cancelScheduledCameraFrame();
 
     const statusText = document.getElementById('cameraLiveStatusText');
     if (statusText) {
         statusText.className = 'ms-1 text-success fw-bold';
         statusText.textContent = 'Active & Tracking';
     }
+
+    scheduleNextCameraFrame();
 }
 
 function pauseCameraProcessing() {
-    if (cameraProcessingInterval) {
-        clearInterval(cameraProcessingInterval);
-        cameraProcessingInterval = null;
-    }
+    cancelScheduledCameraFrame();
 
     const statusText = document.getElementById('cameraLiveStatusText');
     if (statusText && isCameraActive) {
@@ -875,55 +1093,111 @@ function resumeCameraProcessing() {
     }
 }
 
-function processCameraFrame() {
+async function processCameraFrame(now, metadata) {
     if (!sessionData.isRunning || !isCameraActive || !cameraRequired(sessionData.sessionType)) return;
 
-    const videoEl = document.getElementById('cameraFeed');
-    const canvas = document.getElementById('cameraCanvas');
-    if (!videoEl || !canvas || videoEl.readyState < 2) return;
-
-    canvas.width = 160;
-    canvas.height = 120;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(videoEl, 0, 0, 160, 120);
-
-    let frameData;
-    try {
-        frameData = ctx.getImageData(0, 0, 160, 120).data;
-    } catch (e) {
+    if (isProcessingCameraFrame) {
+        scheduleNextCameraFrame();
         return;
     }
 
-    let diffScore = 0;
-    const totalSampledPixels = (160 * 120) / 4;
+    isProcessingCameraFrame = true;
 
-    if (lastFrameData) {
-        let changed = 0;
-        for (let i = 0; i < frameData.length; i += 16) {
-            const rDiff = Math.abs(frameData[i] - lastFrameData[i]);
-            const gDiff = Math.abs(frameData[i + 1] - lastFrameData[i + 1]);
-            const bDiff = Math.abs(frameData[i + 2] - lastFrameData[i + 2]);
-            const avgDiff = (rDiff + gDiff + bDiff) / 3;
-            if (avgDiff > 24) changed++;
+    try {
+        const videoEl = document.getElementById('cameraFeed');
+        const canvas = document.getElementById('cameraCanvas');
+        if (!videoEl || !canvas || videoEl.readyState < 2) return;
+
+        // Prevent layout thrashing and context reset on every frame
+        if (canvas.width !== 160 || canvas.height !== 120) {
+            canvas.width = 160;
+            canvas.height = 120;
         }
-        diffScore = Math.min(100, Math.round((changed / totalSampledPixels) * 320));
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(videoEl, 0, 0, 160, 120);
+
+        let frameData;
+        try {
+            frameData = ctx.getImageData(0, 0, 160, 120).data;
+        } catch (e) {
+            return;
+        }
+
+        let diffScore = 0;
+        const totalSampledPixels = (160 * 120) / 4;
+
+        if (lastFrameData) {
+            let changed = 0;
+            for (let i = 0; i < frameData.length; i += 16) {
+                const rDiff = Math.abs(frameData[i] - lastFrameData[i]);
+                const gDiff = Math.abs(frameData[i + 1] - lastFrameData[i + 1]);
+                const bDiff = Math.abs(frameData[i + 2] - lastFrameData[i + 2]);
+                const avgDiff = (rDiff + gDiff + bDiff) / 3;
+                if (avgDiff > 24) changed++;
+            }
+            diffScore = Math.min(100, Math.round((changed / totalSampledPixels) * 320));
+        }
+        lastFrameData = frameData;
+
+        // Authoritative Monotonic Frame ID and Capture Timestamp (P0/P1 Timestamp Contract)
+        const frameId = (metadata && typeof metadata.presentedFrames === 'number')
+            ? metadata.presentedFrames
+            : ++internalCameraFrameId;
+        const captureTimestampMs = (metadata && typeof metadata.presentationTime === 'number')
+            ? metadata.presentationTime
+            : (typeof now === 'number' && Number.isFinite(now) ? now : performance.now());
+
+        if (typeof runFusedLegTracking === 'function') {
+            await runFusedLegTracking(diffScore, frameId, captureTimestampMs);
+        }
+
+        // Throttle high-cost DOM UI updates to max 10 FPS (100ms) to prevent rendering freezes
+        const nowMs = performance.now();
+        if (nowMs - lastCameraUiUpdateMs >= 100) {
+            lastCameraUiUpdateMs = nowMs;
+            updateCameraMeter(diffScore);
+            handleMotionState(diffScore);
+            updateDiagnosticsDrawer();
+        }
+    } catch (err) {
+        console.warn('processCameraFrame error:', err);
+    } finally {
+        isProcessingCameraFrame = false;
+        scheduleNextCameraFrame();
     }
-    lastFrameData = frameData;
+}
 
-    updateCameraMeter(diffScore);
-
-    if (typeof runFusedLegTracking === 'function') {
-        runFusedLegTracking(diffScore);
+function renderIdleAccuracyDisplay() {
+    const accuracyEl = document.getElementById('accuracy');
+    if (accuracyEl) {
+        accuracyEl.textContent = '--';
     }
+    const progressBar = document.getElementById('accuracyProgress');
+    if (progressBar) {
+        progressBar.style.width = '0%';
+        progressBar.textContent = 'Waiting for movement...';
+        progressBar.className = 'progress-bar bg-secondary';
+    }
+}
 
+function handleMotionState(diffScore) {
+    const threshold = (typeof MOTION_THRESHOLD !== 'undefined') ? MOTION_THRESHOLD : 12;
     if (modeConfig.key === 'gait_trainer' || modeConfig.key === 'upper_limb_motor') {
         motionHistory.push({ time: Date.now(), score: diffScore });
         if (motionHistory.length > 30) motionHistory.shift();
 
-        if (diffScore >= MOTION_THRESHOLD) {
+        if (diffScore >= threshold) {
             updateVoiceOrMotionIndicator(true, 'Active');
+            if (isUserIdle) {
+                isUserIdle = false;
+                updateAccuracyDisplay(sessionData.accuracyScore);
+            }
         } else {
             updateVoiceOrMotionIndicator(false, 'Waiting Movement');
+            if (!isUserIdle) {
+                isUserIdle = true;
+                renderIdleAccuracyDisplay();
+            }
         }
     } else if (modeConfig.key === 'balance_training') {
         updateVoiceOrMotionIndicator(true, 'Tracking Posture');
@@ -978,6 +1252,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (sessionData.sessionType === 'finger_tapping') {
         window.addEventListener('keydown', onSpacebarTap);
+    }
+
+    if (window.nuroSync && typeof window.nuroSync.setBpm === 'function') {
+        window.nuroSync.setBpm(sessionData.currentBPM);
+    }
+
+    if (modeConfig.key === 'gait_trainer' || modeConfig.key === 'upper_limb_motor') {
+        isUserIdle = true;
+        renderIdleAccuracyDisplay();
     }
 
     initializeChart();
@@ -1096,9 +1379,38 @@ function initializeChart() {
     });
 }
 
+function getActiveDurationSeconds() {
+    if (!sessionData.startTime) return 0;
+    const now = Date.now();
+    const startMs = (sessionData.startTime instanceof Date) ? sessionData.startTime.getTime() : Number(sessionData.startTime);
+    let pausedMs = totalPausedTime;
+    if (pausedAt !== null) {
+        pausedMs += (now - pausedAt);
+    }
+    const elapsedMs = Math.max(0, (now - startMs) - pausedMs);
+    return Math.floor(elapsedMs / 1000);
+}
+
 function startSession() {
+    if (pausedAt !== null) {
+        resumeSession();
+        return;
+    }
+    
+    pausedAt = null;
+    totalPausedTime = 0;
     sessionData.isRunning = true;
     sessionData.startTime = new Date();
+    
+    if (window.nuroSync && typeof window.nuroSync.setBpm === 'function') {
+        window.nuroSync.setBpm(sessionData.currentBPM);
+    }
+    
+    // Set initial idle display state for movement tracking modes
+    if (modeConfig.key === 'gait_trainer' || modeConfig.key === 'upper_limb_motor') {
+        isUserIdle = true;
+        renderIdleAccuracyDisplay();
+    }
     
     document.getElementById('startBtn').style.display = 'none';
     document.getElementById('pauseBtn').style.display = 'inline-block';
@@ -1112,6 +1424,7 @@ function startSession() {
         startCameraProcessing();
     }
     
+    updateTimer();
     sessionTimer = setInterval(updateTimer, 1000);
     updateInterval = setInterval(updateSession, 5000);
     if (modeConfig.microphone_required) {
@@ -1122,7 +1435,9 @@ function startSession() {
 }
 
 function pauseSession() {
+    if (!sessionData.isRunning) return; // Only transition if currently active!
     sessionData.isRunning = false;
+    pausedAt = Date.now();
     
     document.getElementById('startBtn').style.display = 'inline-block';
     document.getElementById('pauseBtn').style.display = 'none';
@@ -1140,8 +1455,44 @@ function pauseSession() {
         clearInterval(voiceUpdateInterval);
     }
     
+    updateTimer();
     if (typeof feather !== 'undefined') feather.replace();
-    console.log('[SESSION] Session paused');
+    console.log('[SESSION] Session paused at', pausedAt);
+}
+
+function resumeSession() {
+    if (sessionData.isRunning) return;
+    
+    if (pausedAt !== null) {
+        const pauseDuration = Date.now() - pausedAt;
+        totalPausedTime += pauseDuration;
+        console.log(`[SESSION] Resumed after ${Math.round(pauseDuration)}ms pause. Total paused: ${Math.round(totalPausedTime)}ms`);
+        pausedAt = null;
+    }
+    
+    sessionData.isRunning = true;
+    
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('pauseBtn').style.display = 'inline-block';
+    document.getElementById('stopBtn').style.display = 'inline-block';
+    
+    if (typeof startAudioEngine === 'function') {
+        startAudioEngine(sessionData.currentBPM);
+    }
+    
+    if (cameraRequired(sessionData.sessionType) && isCameraActive) {
+        startCameraProcessing();
+    }
+    
+    updateTimer();
+    sessionTimer = setInterval(updateTimer, 1000);
+    updateInterval = setInterval(updateSession, 5000);
+    if (modeConfig.microphone_required) {
+        voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
+    }
+    
+    if (typeof feather !== 'undefined') feather.replace();
+    console.log('[SESSION] Session resumed');
 }
 
 function stopSession() {
@@ -1158,9 +1509,28 @@ function stopSession() {
     
     stopCamera();
     window.removeEventListener('keydown', onSpacebarTap);
+    if (window.movementIntelligence && typeof window.movementIntelligence.reset === 'function') {
+        window.movementIntelligence.reset();
+    }
+    if (window.adaptiveEngine && typeof window.adaptiveEngine.reset === 'function') {
+        window.adaptiveEngine.reset();
+    }
+    if (window.nuroAgent && typeof window.nuroAgent.reset === 'function') {
+        window.nuroAgent.reset();
+    }
     
-    const now = new Date();
-    sessionData.duration = sessionData.startTime ? Math.floor((now - sessionData.startTime) / 1000) : 0;
+    sessionData.duration = getActiveDurationSeconds();
+    if (pausedAt !== null) {
+        totalPausedTime += (Date.now() - pausedAt);
+        pausedAt = null;
+    }
+    
+    const minutes = Math.floor(sessionData.duration / 60);
+    const seconds = sessionData.duration % 60;
+    const timerEl = document.getElementById('sessionTimer');
+    if (timerEl) {
+        timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
     
     completeSessionOnServer();
 }
@@ -1213,6 +1583,15 @@ async function completeSessionOnServer() {
                     on_time_pct: sessionData.accuracyScore || 85
                 }
             };
+        }
+
+        if (metricsPayload) {
+            metricsPayload.movement_intelligence = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
+            metricsPayload.adaptive_state = window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null);
+            metricsPayload.adaptation_decision = window.adaptiveEngine && typeof window.adaptiveEngine.getLastDecision === 'function' ? window.adaptiveEngine.getLastDecision() : null;
+            metricsPayload.agent_state = window.latestAgentState || (window.nuroAgent && typeof window.nuroAgent.getCurrentState === 'function' ? window.nuroAgent.getCurrentState() : null);
+            metricsPayload.agent_decision = window.nuroAgent && typeof window.nuroAgent.getCurrentReasoning === 'function' ? window.nuroAgent.getCurrentReasoning() : null;
+            metricsPayload.agent_summary = window.nuroAgent && typeof window.nuroAgent.generateSessionSummary === 'function' ? window.nuroAgent.generateSessionSummary() : null;
         }
 
         const response = await fetch(`/session/${sessionData.id}/complete`, {
@@ -1280,7 +1659,16 @@ async function completeSessionOnServer() {
             }
             
             const feedbackText = data.feedback || "Terrific commitment to today's session! Regular rhythmic stimulation supports neuromuscular neuroplasticity.";
-            if (feedbackEl) feedbackEl.textContent = feedbackText;
+            if (feedbackEl) {
+                let fullFeedback = feedbackText;
+                if (data.agent_reflection && data.agent_reflection.summary) {
+                    fullFeedback += `\n\n[Nuro Agent Closed-Loop Reflection]: ${data.agent_reflection.summary}`;
+                    if (data.agent_reflection.nextSessionStartingPoint) {
+                        fullFeedback += ` (Target cadence for next session: ${data.agent_reflection.nextSessionStartingPoint} BPM).`;
+                    }
+                }
+                feedbackEl.innerText = fullFeedback;
+            }
             
             const modalEl = document.getElementById('sessionCompleteModal');
             if (modalEl && typeof bootstrap !== 'undefined') {
@@ -1315,10 +1703,9 @@ function confirmExitSession() {
 }
 
 function updateTimer() {
-    if (!sessionData.isRunning || !sessionData.startTime) return;
+    if (!sessionData.startTime) return;
     
-    const now = new Date();
-    const elapsed = Math.floor((now - sessionData.startTime) / 1000);
+    const elapsed = getActiveDurationSeconds();
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     
@@ -1329,33 +1716,283 @@ function updateTimer() {
 }
 
 function updateDiagnosticsDrawer() {
-    if (!window.legTracker || typeof window.legTracker.getDiagnostics !== 'function') return;
-    const diag = window.legTracker.getDiagnostics();
-    if (!diag) return;
+    if (window.legTracker && typeof window.legTracker.getDiagnostics === 'function') {
+        const diag = window.legTracker.getDiagnostics();
+        if (diag) {
+            const fpsEl = document.getElementById('diagPoseFps');
+            const latEl = document.getElementById('diagLatency');
+            const effFpsEl = document.getElementById('diagEffectiveFps');
+            const jitterEl = document.getElementById('diagFrameTimingJitter');
+            const ageEl = document.getElementById('diagResultAge');
+            const dropEl = document.getElementById('diagDroppedFrames');
+            const oooEl = document.getElementById('diagOutOfOrder');
+            const stabEl = document.getElementById('diagTemporalStability');
 
-    const fpsEl = document.getElementById('diagPoseFps');
-    const latEl = document.getElementById('diagLatency');
-    const trackCovEl = document.getElementById('diagTrackingCoverage');
-    const critCovEl = document.getElementById('diagCritLandmarkCov');
-    const validStepsEl = document.getElementById('diagValidSteps');
-    const rejStepsEl = document.getElementById('diagRejectedSteps');
-    const stateBadge = document.getElementById('diagQualityStateBadge');
+            const trackCovEl = document.getElementById('diagTrackingCoverage');
+            const critCovEl = document.getElementById('diagCritLandmarkCov');
+            const validStepsEl = document.getElementById('diagValidSteps');
+            const rejStepsEl = document.getElementById('diagRejectedSteps');
+            const stateBadge = document.getElementById('diagQualityStateBadge');
 
-    if (fpsEl) fpsEl.textContent = diag.fps;
-    if (latEl) latEl.textContent = diag.latency_ms;
-    if (trackCovEl) trackCovEl.textContent = `${Math.round(diag.tracking_coverage * 100)}%`;
-    if (critCovEl) critCovEl.textContent = `${Math.round(diag.critical_landmark_coverage * 100)}%`;
-    if (validStepsEl) validStepsEl.textContent = diag.valid_steps;
-    if (rejStepsEl) rejStepsEl.textContent = diag.rejected_step_candidates;
+            if (fpsEl) fpsEl.textContent = diag.fps;
+            if (latEl) latEl.textContent = diag.latency_ms;
+            if (effFpsEl) effFpsEl.textContent = diag.effective_fps || diag.fps;
+            if (jitterEl) jitterEl.textContent = Number(diag.frame_timing_jitter_ms || 0).toFixed(1);
+            if (ageEl) ageEl.textContent = Math.round(diag.result_age_ms || 0);
+            if (dropEl) dropEl.textContent = diag.dropped_frames || 0;
+            if (oooEl) oooEl.textContent = diag.out_of_order_count || 0;
+            if (stabEl) {
+                const stab = Number(diag.temporal_stability !== undefined ? diag.temporal_stability : 1.0).toFixed(2);
+                stabEl.textContent = stab;
+                stabEl.className = stab >= 0.85 ? 'text-success fw-bold' : (stab >= 0.65 ? 'text-warning fw-bold' : 'text-danger fw-bold');
+            }
 
-    if (stateBadge) {
-        stateBadge.textContent = diag.quality_state;
-        if (diag.quality_state === 'EXCELLENT' || diag.quality_state === 'GOOD') {
-            stateBadge.className = 'badge bg-success';
-        } else if (diag.quality_state === 'FAIR') {
-            stateBadge.className = 'badge bg-warning text-dark';
-        } else {
-            stateBadge.className = 'badge bg-danger';
+            if (trackCovEl) trackCovEl.textContent = `${Math.round(diag.tracking_coverage * 100)}%`;
+            if (critCovEl) critCovEl.textContent = `${Math.round(diag.critical_landmark_coverage * 100)}%`;
+            if (validStepsEl) validStepsEl.textContent = diag.valid_steps;
+            if (rejStepsEl) rejStepsEl.textContent = diag.rejected_step_candidates;
+
+            if (stateBadge) {
+                stateBadge.textContent = diag.quality_state;
+                if (diag.quality_state === 'EXCELLENT' || diag.quality_state === 'GOOD') {
+                    stateBadge.className = 'badge bg-success';
+                } else if (diag.quality_state === 'FAIR') {
+                    stateBadge.className = 'badge bg-warning text-dark';
+                } else {
+                    stateBadge.className = 'badge bg-danger';
+                }
+            }
+        }
+    }
+
+    const mi = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
+    if (mi) {
+        const stateEl = document.getElementById('diagMovementState');
+        const qualityEl = document.getElementById('diagMovementQuality');
+        const smoothEl = document.getElementById('diagSmoothness');
+        const rawJerkEl = document.getElementById('diagRawJerk');
+        const filtJerkEl = document.getElementById('diagFilteredJerk');
+        const symEl = document.getElementById('diagSymmetry');
+        const romEl = document.getElementById('diagRom');
+        const consEl = document.getElementById('diagConsistency');
+        const rhythmSyncEl = document.getElementById('diagRhythmSync');
+        const timingErrEl = document.getElementById('diagTimingError');
+        const confEl = document.getElementById('diagConfidence');
+
+        if (stateEl) {
+            stateEl.textContent = mi.state || 'IDLE';
+            if (mi.state === 'ACTIVE') {
+                stateEl.className = 'badge bg-success';
+            } else if (mi.state === 'WARMING_UP') {
+                stateEl.className = 'badge bg-info text-dark';
+            } else if (mi.state === 'LOW_CONFIDENCE') {
+                stateEl.className = 'badge bg-warning text-dark';
+            } else {
+                stateEl.className = 'badge bg-secondary';
+            }
+        }
+        if (qualityEl && mi.movement) {
+            qualityEl.textContent = `${Math.round((mi.movement.quality || 0) * 100)}%`;
+        }
+        if (smoothEl && mi.movement) {
+            smoothEl.textContent = Number(mi.movement.smoothness || 0).toFixed(2);
+        }
+        if (rawJerkEl && mi.movement) {
+            rawJerkEl.textContent = mi.movement.rawJerk !== undefined ? mi.movement.rawJerk : '--';
+        }
+        if (filtJerkEl && mi.movement) {
+            filtJerkEl.textContent = mi.movement.filteredJerk !== undefined ? mi.movement.filteredJerk : '--';
+        }
+        if (symEl && mi.movement) {
+            symEl.textContent = Number(mi.movement.symmetry || 0).toFixed(2);
+        }
+        if (romEl && mi.movement) {
+            romEl.textContent = Number(mi.movement.rom || 0).toFixed(2);
+        }
+        if (consEl && mi.movement) {
+            consEl.textContent = Number(mi.movement.consistency || 0).toFixed(2);
+        }
+        if (rhythmSyncEl && mi.rhythm) {
+            rhythmSyncEl.textContent = `${Math.round((mi.rhythm.sync || 0) * 100)}%`;
+        }
+        if (timingErrEl && mi.rhythm) {
+            timingErrEl.textContent = Math.round(mi.rhythm.timingErrorMs || 0);
+        }
+        if (confEl) {
+            confEl.textContent = `${Math.round((mi.confidence || 0) * 100)}%`;
+        }
+    }
+
+    // P4 Learned Continuous Phase & Temporal Motion Intelligence Diagnostics
+    const p4 = window.latestP4State || (window.p4PhaseIntelligence && typeof window.p4PhaseIntelligence.getDiagnostics === 'function' ? window.p4PhaseIntelligence.latestOutput : null);
+    if (p4) {
+        const p4StateBadge = document.getElementById('diagP4PhaseState');
+        const p4NormEl = document.getElementById('diagP4PhaseNorm');
+        const p4VelEl = document.getElementById('diagP4PhaseVel');
+        const p4CycleIdxEl = document.getElementById('diagP4CycleIndex');
+        const p4CycleDurEl = document.getElementById('diagP4CycleDuration');
+        const p4BaselineEl = document.getElementById('diagP4BaselineDev');
+        const p4SourceEl = document.getElementById('diagP4Source');
+
+        if (p4StateBadge && p4.phase) {
+            p4StateBadge.textContent = p4.phase.state || 'IDLE';
+            if (p4.phase.state === 'RISING') p4StateBadge.className = 'badge bg-primary';
+            else if (p4.phase.state === 'PEAK') p4StateBadge.className = 'badge bg-success';
+            else if (p4.phase.state === 'FALLING') p4StateBadge.className = 'badge bg-info text-dark';
+            else if (p4.phase.state === 'RECOVERY') p4StateBadge.className = 'badge bg-secondary';
+            else p4StateBadge.className = 'badge bg-dark';
+        }
+        if (p4NormEl && p4.phase) p4NormEl.textContent = `${Math.round((p4.phase.normalized || 0) * 100)}% (${Number(p4.phase.radians || 0).toFixed(2)} rad)`;
+        if (p4VelEl && p4.phase) p4VelEl.textContent = Number(p4.phase.velocity || 0).toFixed(2);
+        if (p4CycleIdxEl && p4.cycle) p4CycleIdxEl.textContent = p4.cycle.index || 0;
+        if (p4CycleDurEl && p4.cycle) p4CycleDurEl.textContent = Math.round(p4.cycle.durationMs || 0);
+        if (p4BaselineEl && p4.personalBaseline) {
+            p4BaselineEl.textContent = p4.personalBaseline.available
+                ? `${Number(p4.personalBaseline.phaseDeviation || 0).toFixed(2)} rad (${Math.round(p4.personalBaseline.meanDurationMs || 0)}ms)`
+                : 'Calibrating...';
+        }
+        if (p4SourceEl) p4SourceEl.textContent = `${p4.source || 'FALLBACK'} (${p4.provider || 'EDGE'})`;
+    }
+
+    // P2 Adaptive Intelligence Diagnostics
+    const adState = window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null);
+    if (adState) {
+        const adDirEl = document.getElementById('diagAdaptiveDirection');
+        const adDiffEl = document.getElementById('diagAdaptiveDifficulty');
+        const adTempoEl = document.getElementById('diagAdaptiveTempo');
+        const adRomEl = document.getElementById('diagTargetRom');
+        const adRepsEl = document.getElementById('diagTargetReps');
+        const adReasonEl = document.getElementById('diagAdaptiveReason');
+
+        if (adDirEl && adState.adaptation) {
+            adDirEl.textContent = adState.adaptation.direction;
+            if (adState.adaptation.direction === 'PROGRESS') {
+                adDirEl.className = 'badge bg-success';
+            } else if (adState.adaptation.direction === 'REGRESS') {
+                adDirEl.className = 'badge bg-warning text-dark';
+            } else if (adState.adaptation.direction === 'FREEZE') {
+                adDirEl.className = 'badge bg-danger';
+            } else {
+                adDirEl.className = 'badge bg-secondary';
+            }
+        }
+        if (adDiffEl) adDiffEl.textContent = Number(adState.difficulty || 0).toFixed(2);
+        if (adTempoEl) adTempoEl.textContent = Math.round(adState.tempo || sessionData.currentBPM);
+        if (adRomEl && adState.movementTarget) adRomEl.textContent = `${Math.round(adState.movementTarget.rom * 100)}%`;
+        if (adRepsEl) adRepsEl.textContent = adState.targetRepetitions || 10;
+        if (adReasonEl) {
+            adReasonEl.textContent = adState.reason || 'Observing baseline';
+            adReasonEl.title = adState.reason || '';
+        }
+    }
+
+    // P3 Nuro Agent Diagnostics & Intelligence Panel
+    const agent = window.nuroAgent;
+    if (agent && typeof agent.getCurrentState === 'function') {
+        const agState = agent.getCurrentState();
+        const lastDec = agState.lastDecision || {};
+
+        // Update Drawer Elements
+        const agModeEl = document.getElementById('diagAgentMode');
+        const perfIndexEl = document.getElementById('diagPerfIndex');
+        const perfTrendEl = document.getElementById('diagPerfTrend');
+        const outcomeEl = document.getElementById('diagLastOutcome');
+
+        if (agModeEl) {
+            agModeEl.textContent = agState.mode || 'OBSERVE';
+            if (agState.mode === 'ACT' || agState.mode === 'PLAN') {
+                agModeEl.className = 'badge bg-info text-dark';
+            } else if (agState.mode === 'EVALUATE') {
+                agModeEl.className = 'badge bg-warning text-dark';
+            } else {
+                agModeEl.className = 'badge bg-secondary';
+            }
+        }
+        if (perfIndexEl && agState.performance) {
+            perfIndexEl.textContent = `${Math.round((agState.performance.score || 0) * 100)}%`;
+        }
+        if (perfTrendEl && agState.performance) {
+            perfTrendEl.textContent = agState.performance.trend || 'STABLE';
+        }
+        if (outcomeEl) {
+            outcomeEl.textContent = agState.lastOutcome || 'NONE';
+            if (agState.lastOutcome === 'POSITIVE') outcomeEl.className = 'text-success fw-bold';
+            else if (agState.lastOutcome === 'NEGATIVE') outcomeEl.className = 'text-danger fw-bold';
+            else outcomeEl.className = 'text-info';
+        }
+
+        // Update Main Nuro Intelligence Panel
+        const pIndex = document.getElementById('agentPerfIndex');
+        const rSync = document.getElementById('agentRhythmSync');
+        const conf = document.getElementById('agentConfidence');
+        const stab = document.getElementById('agentStability');
+        const stBadge = document.getElementById('agentStateBadge');
+        const decBadge = document.getElementById('agentDecisionBadge');
+        const decTitle = document.getElementById('agentDecisionTitle');
+        const decReason = document.getElementById('agentDecisionReason');
+        const hypStatus = document.getElementById('agentHypothesisStatus');
+        const hypText = document.getElementById('agentHypothesisText');
+        const tlCount = document.getElementById('agentTimelineCount');
+        const tlContainer = document.getElementById('agentTimelineContainer');
+
+        if (pIndex && agState.performance) pIndex.textContent = `${Math.round((agState.performance.score || 0) * 100)}%`;
+        if (rSync && agState.currentState) rSync.textContent = `${Math.round((agState.currentState.rhythmSync || 0) * 100)}%`;
+        if (conf && agState.currentState) conf.textContent = `${Math.round((agState.currentState.confidence || 0) * 100)}%`;
+        if (stab && agState.performance) stab.textContent = `${Math.round((agState.performance.stability || 0) * 100)}%`;
+
+        if (stBadge && agState.performance) {
+            const tr = agState.performance.trend;
+            stBadge.textContent = tr;
+            if (tr === 'IMPROVING') stBadge.className = 'badge bg-success';
+            else if (tr === 'DECLINING') stBadge.className = 'badge bg-warning text-dark';
+            else if (tr === 'VOLATILE') stBadge.className = 'badge bg-danger';
+            else stBadge.className = 'badge bg-secondary';
+        }
+
+        if (decBadge && lastDec.intent) {
+            decBadge.textContent = lastDec.intent;
+            if (lastDec.intent === 'PROGRESS') {
+                decBadge.style.background = 'rgba(16, 185, 129, 0.25)';
+                decBadge.style.color = '#34d399';
+            } else if (lastDec.intent === 'RECOVER') {
+                decBadge.style.background = 'rgba(245, 158, 11, 0.25)';
+                decBadge.style.color = '#fbbf24';
+            } else {
+                decBadge.style.background = 'rgba(14, 165, 233, 0.25)';
+                decBadge.style.color = '#38bdf8';
+            }
+        }
+
+        if (decTitle && lastDec.action) {
+            const titleMap = {
+                'INCREASE_TEMPO': 'Advancing auditory pacing (+BPM)',
+                'DECREASE_TEMPO': 'Easing auditory pacing for recovery (-BPM)',
+                'INCREASE_MOVEMENT_TARGET': 'Increasing movement target progression',
+                'DECREASE_MOVEMENT_TARGET': 'Adjusting movement target for stability',
+                'MAINTAIN': 'Consolidating steady motor entrainment',
+                'REQUEST_MORE_OBSERVATION': 'Observing motor response to stabilize tracking'
+            };
+            decTitle.textContent = titleMap[lastDec.action] || lastDec.action;
+        }
+
+        if (decReason && lastDec.reason) {
+            decReason.textContent = lastDec.reason;
+        }
+
+        if (agState.hypothesis) {
+            if (hypStatus) hypStatus.textContent = agState.hypothesis.status || 'FORMED';
+            if (hypText) hypText.textContent = `"${agState.hypothesis.hypothesis}"`;
+        }
+
+        // Render Event Timeline
+        if (agState.eventTimeline && tlContainer) {
+            if (tlCount) tlCount.textContent = `${agState.eventTimeline.length} events`;
+            tlContainer.innerHTML = agState.eventTimeline.slice(-6).reverse().map(e => `
+                <div class="d-flex justify-content-between text-truncate py-1 border-bottom border-secondary border-opacity-25">
+                    <span class="text-info me-2">[${e.time}]</span>
+                    <span class="text-light text-truncate">${e.message}</span>
+                </div>
+            `).join('');
         }
     }
 }
@@ -1381,14 +2018,31 @@ async function updateSession() {
     
     sessionData.accuracyScore = currentAccuracy;
     
-    // Adaptive BPM controller:
+    // Adaptive BPM controller (P2 Closed Loop):
     let suggestedBPM = sessionData.currentBPM;
+    const miForAdapt = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
+    const nowSec = performance.now() / 1000.0;
+
     if (sessionData.aiAdjustmentEnabled) {
-        if (currentAccuracy > 85) {
-            const progressToTarget = (sessionData.targetBPM - sessionData.currentBPM) * 0.1;
-            suggestedBPM = Math.min(sessionData.targetBPM, sessionData.currentBPM + progressToTarget);
-        } else if (currentAccuracy < 60) {
-            suggestedBPM = Math.max(sessionData.initialBPM * 0.8, sessionData.currentBPM - 2);
+        if (window.adaptiveEngine) {
+            const adaptiveResult = window.adaptiveEngine.evaluate(miForAdapt, sessionData.currentBPM, nowSec);
+            window.latestAdaptiveState = adaptiveResult;
+            if (adaptiveResult && typeof adaptiveResult.tempo === 'number') {
+                suggestedBPM = adaptiveResult.tempo;
+            }
+
+            // P3 Nuro Agent Closed-Loop Observation
+            if (window.nuroAgent) {
+                const agResult = window.nuroAgent.observe(miForAdapt, adaptiveResult, nowSec);
+                window.latestAgentState = agResult;
+            }
+        } else {
+            if (currentAccuracy > 85) {
+                const progressToTarget = (sessionData.targetBPM - sessionData.currentBPM) * 0.1;
+                suggestedBPM = Math.min(sessionData.targetBPM, sessionData.currentBPM + progressToTarget);
+            } else if (currentAccuracy < 60) {
+                suggestedBPM = Math.max(sessionData.initialBPM * 0.8, sessionData.currentBPM - 2);
+            }
         }
     }
 
@@ -1419,6 +2073,15 @@ async function updateSession() {
         };
     }
 
+    if (telemetryPayload) {
+        telemetryPayload.movement_intelligence = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
+        telemetryPayload.adaptive_state = window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null);
+        telemetryPayload.adaptation_decision = window.adaptiveEngine && typeof window.adaptiveEngine.getLastDecision === 'function' ? window.adaptiveEngine.getLastDecision() : null;
+        telemetryPayload.agent_state = window.latestAgentState || (window.nuroAgent && typeof window.nuroAgent.getCurrentState === 'function' ? window.nuroAgent.getCurrentState() : null);
+        telemetryPayload.agent_decision = window.nuroAgent && typeof window.nuroAgent.getCurrentReasoning === 'function' ? window.nuroAgent.getCurrentReasoning() : null;
+        telemetryPayload.agent_summary = window.nuroAgent && typeof window.nuroAgent.generateSessionSummary === 'function' ? window.nuroAgent.generateSessionSummary() : null;
+    }
+
     fetch('/api/motion/telemetry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1428,6 +2091,11 @@ async function updateSession() {
     updateDiagnosticsDrawer();
     
     try {
+        const miState = window.latestMovementState || (window.movementIntelligence && typeof window.movementIntelligence.getState === 'function' ? window.movementIntelligence.getState() : null);
+        const adState = window.latestAdaptiveState || (window.adaptiveEngine && typeof window.adaptiveEngine.getCurrentState === 'function' ? window.adaptiveEngine.getCurrentState() : null);
+        const adDecision = window.adaptiveEngine && typeof window.adaptiveEngine.getLastDecision === 'function' ? window.adaptiveEngine.getLastDecision() : null;
+        const agDecision = window.nuroAgent && typeof window.nuroAgent.getCurrentReasoning === 'function' ? window.nuroAgent.getCurrentReasoning() : null;
+
         const response = await fetch('/session/update', {
             method: 'POST',
             headers: {
@@ -1445,9 +2113,21 @@ async function updateSession() {
                 gait_symmetry: sessionData.averageSymmetry || (window.legTracker ? window.legTracker.averageSymmetry : 100),
                 tap_count: tapState ? tapState.count : 0,
                 tap_cadence: tapState ? tapState.cadence : 0,
-                posture_stability: window.legTracker ? window.legTracker.balanceStabilityScore : 100
+                posture_stability: window.legTracker ? window.legTracker.balanceStabilityScore : 100,
+                movement_intelligence: miState,
+                adaptive_state: adState,
+                adaptation_record: adDecision,
+                adaptation_decision: adDecision,
+                agent_decision: agDecision,
+                agent_state: window.latestAgentState,
+                agent_summary: window.nuroAgent ? window.nuroAgent.generateSessionSummary() : null
             })
         });
+
+        // Flush any buffered idempotently-keyed events
+        if (window.nuroAgent && typeof window.nuroAgent.flushPendingEvents === 'function') {
+            window.nuroAgent.flushPendingEvents().catch(e => console.debug('Event flush error:', e));
+        }
         
         if (response.ok) {
             const data = await response.json();
@@ -1457,6 +2137,9 @@ async function updateSession() {
                 updateBPMDisplay();
                 if (typeof adjustAudioTempo === 'function') {
                     adjustAudioTempo(newBPM);
+                }
+                if (window.nuroSync && typeof window.nuroSync.setBpm === 'function') {
+                    window.nuroSync.setBpm(newBPM);
                 }
             }
             updateAccuracyDisplay(currentAccuracy);
@@ -1473,6 +2156,10 @@ function updateBPMDisplay() {
 }
 
 function updateAccuracyDisplay(accuracy) {
+    if (isUserIdle && (sessionData.sessionType === 'gait_trainer' || sessionData.sessionType === 'upper_limb_motor')) {
+        renderIdleAccuracyDisplay();
+        return;
+    }
     const roundedAccuracy = Math.round(accuracy);
     const accuracyEl = document.getElementById('accuracy');
     if (accuracyEl) accuracyEl.textContent = `${roundedAccuracy}%`;
@@ -1517,6 +2204,101 @@ function changeBeatSound() {
         changeSoundType(selectedSound);
     }
     console.log(`Beat sound changed to: ${selectedSound}`);
+}
+
+// ==================================================
+// Section 43: Interactive Hackathon Demo Scenario
+// ==================================================
+let demoModeActive = false;
+let demoPhase = 0;
+let demoTimer = null;
+
+function toggleDemoMode() {
+    demoModeActive = !demoModeActive;
+    const btn = document.getElementById('btnDemoModeToggle');
+    if (!demoModeActive) {
+        if (demoTimer) clearTimeout(demoTimer);
+        demoPhase = 0;
+        if (btn) btn.innerHTML = '<i data-feather="play-circle" style="width: 11px; height: 11px; vertical-align: -1px;"></i> Demo Walkthrough';
+        if (window.nuroAgent) window.nuroAgent.recordEvent('Interactive demo mode ended.');
+        if (typeof feather !== 'undefined') feather.replace();
+        return;
+    }
+
+    if (btn) btn.innerHTML = '<i data-feather="stop-circle" style="width: 11px; height: 11px; vertical-align: -1px;"></i> Stop Demo';
+    if (typeof feather !== 'undefined') feather.replace();
+    demoPhase = 1;
+    runDemoPhase(1);
+}
+
+function runDemoPhase(phase) {
+    if (!demoModeActive) return;
+    const agent = window.nuroAgent;
+    const adapt = window.adaptiveEngine;
+    if (!agent || !adapt) return;
+
+    const baseNow = performance.now() / 1000.0;
+
+    if (phase === 1) {
+        agent.recordEvent('[DEMO Phase 1] User performing steadily. Movement: 84%, Rhythm: 89%.');
+        const m1 = { movement: { quality: 0.84, smoothness: 0.82, symmetry: 0.88, consistency: 0.84 }, rhythm: { sync: 0.89, timingErrorMs: 38 }, confidence: 0.95 };
+        adapt.evaluate(m1, 80, baseNow);
+        agent.observe(m1, adapt.getCurrentState(), baseNow);
+        updateDiagnosticsDrawer();
+
+        demoTimer = setTimeout(() => runDemoPhase(2), 2500);
+    } else if (phase === 2) {
+        agent.recordEvent('[DEMO Phase 2] Sustained performance detected. Testing tempo progression: 80 -> 84 BPM.');
+        const m2 = { movement: { quality: 0.86, smoothness: 0.85, symmetry: 0.90, consistency: 0.88 }, rhythm: { sync: 0.91, timingErrorMs: 32 }, confidence: 0.95 };
+        adapt.targetBpm = 84;
+        sessionData.currentBPM = 84;
+        updateBPMDisplay();
+        agent.beginExperiment({ parameter: 'TEMPO', previousValue: 80, newValue: 84, direction: 'PROGRESS' }, baseNow, 0.85, 0.86, 0.91);
+        adapt.evaluate(m2, 84, baseNow);
+        agent.observe(m2, adapt.getCurrentState(), baseNow);
+        updateDiagnosticsDrawer();
+
+        demoTimer = setTimeout(() => runDemoPhase(3), 2800);
+    } else if (phase === 3) {
+        agent.recordEvent('[DEMO Phase 3] High rhythm sync sustained at 84 BPM. Positive outcome evaluated.');
+        const m3 = { movement: { quality: 0.88, smoothness: 0.87, symmetry: 0.91, consistency: 0.89 }, rhythm: { sync: 0.93, timingErrorMs: 28 }, confidence: 0.95 };
+        for (let i = 0; i < 3; i++) {
+            agent.observe(m3, adapt.getCurrentState(), baseNow + i);
+        }
+        updateDiagnosticsDrawer();
+
+        demoTimer = setTimeout(() => runDemoPhase(4), 2800);
+    } else if (phase === 4) {
+        agent.recordEvent('[DEMO Phase 4] Fatigue/cadence drift emerging. Movement consistency declined.');
+        const m4 = { movement: { quality: 0.62, smoothness: 0.60, symmetry: 0.70, consistency: 0.58 }, rhythm: { sync: 0.60, timingErrorMs: 85 }, confidence: 0.94 };
+        agent.beginExperiment({ parameter: 'TEMPO', previousValue: 84, newValue: 88, direction: 'PROGRESS' }, baseNow, 0.86, 0.86, 0.90);
+        adapt.evaluate(m4, 84, baseNow);
+        agent.observe(m4, adapt.getCurrentState(), baseNow);
+        updateDiagnosticsDrawer();
+
+        demoTimer = setTimeout(() => runDemoPhase(5), 2800);
+    } else if (phase === 5) {
+        agent.recordEvent('[DEMO Phase 5] Negative response observed. Returning challenge to previous stable range.');
+        adapt.targetBpm = 80;
+        sessionData.currentBPM = 80;
+        updateBPMDisplay();
+        const m5 = { movement: { quality: 0.76, smoothness: 0.75, symmetry: 0.82, consistency: 0.78 }, rhythm: { sync: 0.79, timingErrorMs: 50 }, confidence: 0.94 };
+        adapt.evaluate(m5, 80, baseNow);
+        agent.observe(m5, adapt.getCurrentState(), baseNow);
+        updateDiagnosticsDrawer();
+
+        demoTimer = setTimeout(() => runDemoPhase(6), 2800);
+    } else if (phase === 6) {
+        agent.recordEvent('[DEMO Phase 6] Performance consolidated. Motor recovery confirmed. Cycle completed!');
+        const m6 = { movement: { quality: 0.82, smoothness: 0.80, symmetry: 0.85, consistency: 0.82 }, rhythm: { sync: 0.84, timingErrorMs: 42 }, confidence: 0.95 };
+        adapt.evaluate(m6, 80, baseNow);
+        agent.observe(m6, adapt.getCurrentState(), baseNow);
+        updateDiagnosticsDrawer();
+        
+        const btn = document.getElementById('btnDemoModeToggle');
+        if (btn) btn.innerHTML = '<i data-feather="check-circle" style="width: 11px; height: 11px; vertical-align: -1px;"></i> Walkthrough Complete';
+        if (typeof feather !== 'undefined') feather.replace();
+    }
 }
 </script>
 
