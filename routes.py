@@ -4,7 +4,8 @@ from app import app, db
 from models import (
     User, PatientProfile, ClinicianProfile, TherapySession, SessionMetrics, BaselineAssessment,
     SchemaVersion, ModelMetadata, SessionEvent, AdaptationRecord, AgentDecision,
-    Intervention, InterventionOutcome, PatientPerformanceEnvelope, SessionSummary
+    Intervention, InterventionOutcome, PatientPerformanceEnvelope, SessionSummary,
+    ClinicalReport
 )
 from datetime import datetime, timedelta
 import json
@@ -712,10 +713,33 @@ def complete_session(session_id):
             symmetry=gait_symmetry
         )
 
+        # Generate and persist Structured Clinical Report (Gemini + Longitudinal Context)
+        clinical_report_dict = None
+        try:
+            from services.historical_analysis import format_historical_context_for_prompt, save_or_update_clinical_report
+            from services.gemini_service import generate_structured_clinical_report
+
+            hist_ctx = format_historical_context_for_prompt(therapy_session.patient_id, therapy_session.session_type)
+            clinical_data = {
+                'activity_type': therapy_session.session_type,
+                'duration_seconds': duration,
+                'initial_bpm': therapy_session.initial_bpm,
+                'final_bpm': final_bpm,
+                'accuracy_score': accuracy_score,
+                'movement_count': max(left_steps + right_steps, tap_count)
+            }
+            clinical_report_json = generate_structured_clinical_report(clinical_data, hist_ctx)
+            saved_report = save_or_update_clinical_report(session_id, clinical_report_json)
+            if saved_report:
+                clinical_report_dict = saved_report.to_dict()
+        except Exception as e:
+            logging.error(f"Error generating clinical report in complete_session: {e}")
+
         return jsonify({
             'success': True,
             'feedback': feedback,
             'agent_reflection': agent_reflection,
+            'clinical_report': clinical_report_dict,
             'session_summary': {
                 'best_tempo': sess_summary.best_tempo,
                 'improvement': sess_summary.improvement,
@@ -1456,3 +1480,133 @@ def patient_credentials(patient_id):
                          patient_profile=patient_profile,
                          patient_user=patient_user,
                          user=user)
+
+
+# ==============================================================================
+# HUGGING FACE INFERENCE ROUTER & DUAL-ENGINE AUDIO GENERATION API
+# ==============================================================================
+
+@app.route('/api/hf/status', methods=['GET'])
+def hf_status():
+    """Check Hugging Face router connection & authentication status"""
+    from beat_generator import BeatGenerator
+    bg = BeatGenerator()
+    status_info = bg.check_connection()
+    return jsonify({
+        'success': True,
+        'status': status_info
+    })
+
+
+@app.route('/api/hf/token', methods=['POST'])
+def hf_update_token():
+    """Test and validate Hugging Face API token"""
+    data = request.get_json(silent=True) or {}
+    token = data.get('token', '').strip()
+    from beat_generator import BeatGenerator
+    bg = BeatGenerator(api_token=token if token else None)
+    status_info = bg.check_connection()
+    return jsonify({
+        'success': status_info.get('authenticated', False),
+        'status': status_info
+    })
+
+
+@app.route('/api/beat/generate_ai', methods=['POST'])
+def generate_ai_beat():
+    """Generate audio rhythm track using Hugging Face router with studio acoustic fallback"""
+    data = request.get_json(silent=True) or {}
+    bpm = float(data.get('bpm', 100))
+    prompt = data.get('prompt')
+    session_type = data.get('session_type', 'rhythmic_walking')
+    duration = int(data.get('duration', 10))
+
+    from beat_generator import BeatGenerator
+    bg = BeatGenerator()
+    result = bg.generate_beat_detailed(
+        bpm=bpm,
+        prompt=prompt,
+        session_type=session_type,
+        duration=duration
+    )
+    return jsonify({
+        'success': result.get('success', False),
+        'audio_url': result.get('audio_url'),
+        'engine_used': result.get('engine_used'),
+        'bpm': result.get('bpm'),
+        'details': result
+    })
+
+
+# ==============================================================================
+# LONGITUDINAL CLINICAL INTELLIGENCE & STRUCTURED REPORTING API
+# ==============================================================================
+
+@app.route('/api/patient/<int:patient_id>/historical-trends', methods=['GET'])
+def patient_historical_trends(patient_id):
+    """Retrieve 9-feature longitudinal intelligence trends for a patient"""
+    if 'user_id' in session:
+        user = db.session.get(User, session['user_id']) if hasattr(db.session, 'get') else User.query.get(session['user_id'])
+        patient_profile = db.session.get(PatientProfile, patient_id) if hasattr(db.session, 'get') else PatientProfile.query.get(patient_id)
+        if patient_profile and not _can_access_patient(user, patient_profile):
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    activity_type = request.args.get('activity_type')
+    from services.historical_analysis import (
+        get_patient_history,
+        compute_accuracy_trend,
+        calculate_advisory_bpm,
+        calculate_accuracy_delta
+    )
+    history = get_patient_history(patient_id, activity_type, limit=20)
+    trend_info = compute_accuracy_trend(history)
+    latest_acc = history[0]['accuracy_score'] if history else 0.0
+    latest_bpm = history[0]['final_bpm'] if history else 60.0
+    advisory_bpm = calculate_advisory_bpm(latest_bpm, latest_acc, trend_info)
+    delta_info = calculate_accuracy_delta(latest_acc, history)
+
+    return jsonify({
+        'success': True,
+        'patient_id': patient_id,
+        'activity_type': activity_type,
+        'history': history,
+        'trend': trend_info,
+        'advisory_bpm': advisory_bpm,
+        'delta': delta_info
+    })
+
+
+@app.route('/api/session/<int:session_id>/clinical-report', methods=['GET'])
+def get_session_clinical_report(session_id):
+    """Retrieve structured clinical report and SOAP documentation for a session"""
+    therapy_session = db.session.get(TherapySession, session_id) if hasattr(db.session, 'get') else TherapySession.query.get(session_id)
+    if not therapy_session:
+        return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+    if 'user_id' in session:
+        user = db.session.get(User, session['user_id']) if hasattr(db.session, 'get') else User.query.get(session['user_id'])
+        if user and not _can_access_session(user, therapy_session):
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    report = ClinicalReport.query.filter_by(session_id=session_id).first()
+    if not report:
+        from services.historical_analysis import format_historical_context_for_prompt, save_or_update_clinical_report
+        from services.gemini_service import generate_structured_clinical_report
+
+        hist_ctx = format_historical_context_for_prompt(therapy_session.patient_id, therapy_session.session_type)
+        clinical_data = {
+            'activity_type': therapy_session.session_type,
+            'duration_seconds': therapy_session.duration_seconds or 0,
+            'initial_bpm': therapy_session.initial_bpm or 60.0,
+            'final_bpm': therapy_session.final_bpm or therapy_session.initial_bpm or 60.0,
+            'accuracy_score': therapy_session.accuracy_score or 0.0,
+            'movement_count': therapy_session.total_steps or 0
+        }
+        report_json = generate_structured_clinical_report(clinical_data, hist_ctx)
+        report = save_or_update_clinical_report(session_id, report_json)
+
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'clinical_report': report.to_dict() if report else None
+    })

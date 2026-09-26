@@ -370,6 +370,72 @@ class SessionSummary(db.Model):
     unsuccessful_adaptations = db.Column(db.Integer, default=0)
     performance_trend = db.Column(db.String(30))
     active_hypotheses_summary = db.Column(db.Text)
-    clinical_review_items = db.Column(db.Text)
     agent_reflection_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ClinicalReport(db.Model):
+    __tablename__ = 'clinical_reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient_profiles.id'), nullable=False)
+    clinician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('therapy_sessions.id', ondelete='CASCADE'), nullable=True)
+    
+    activity_type = db.Column(db.String(50))
+    duration_seconds = db.Column(db.Integer)
+    initial_bpm = db.Column(db.Float)
+    avg_bpm = db.Column(db.Float)
+    final_bpm = db.Column(db.Float)
+    target_bpm = db.Column(db.Float)
+    accuracy_score = db.Column(db.Float)
+    movement_count = db.Column(db.Integer, default=0)
+    
+    # Structured clinical bullet points
+    summary = db.Column(db.Text)
+    what_you_did = db.Column(db.Text)
+    performance_observations = db.Column(db.Text)
+    what_to_improve = db.Column(db.Text)
+    recommendations = db.Column(db.Text)
+    
+    # Medical SOAP documentation
+    soap_subjective = db.Column(db.Text)
+    soap_objective = db.Column(db.Text)
+    soap_assessment = db.Column(db.Text)
+    soap_plan = db.Column(db.Text)
+    
+    ai_model = db.Column(db.String(50), default='gemini-2.5-flash')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'patient_id': self.patient_id,
+            'session_id': self.session_id,
+            'activity_type': self.activity_type,
+            'duration_seconds': self.duration_seconds,
+            'initial_bpm': self.initial_bpm,
+            'avg_bpm': self.avg_bpm,
+            'final_bpm': self.final_bpm,
+            'target_bpm': self.target_bpm,
+            'accuracy_score': self.accuracy_score,
+            'movement_count': self.movement_count,
+            'summary': self.summary,
+            'what_you_did': self.what_you_did,
+            'performance_observations': self.performance_observations,
+            'what_to_improve': self.what_to_improve,
+            'recommendations': self.recommendations,
+            'soap': {
+                'subjective': self.soap_subjective,
+                'objective': self.soap_objective,
+                'assessment': self.soap_assessment,
+                'plan': self.soap_plan
+            },
+            'soap_subjective': self.soap_subjective,
+            'soap_objective': self.soap_objective,
+            'soap_assessment': self.soap_assessment,
+            'soap_plan': self.soap_plan,
+            'ai_model': self.ai_model,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+

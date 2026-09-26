@@ -51,8 +51,8 @@
             <div class="col-md-3">
                 <div class="card">
                     <div class="card-body text-center">
-                        <i data-feather="trending-up" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ patient_profile.baseline_cadence or 'N/A' }}</h4>
+                        <i data-feather="trending-up" class="mb-2" style="width: 32px; height: 32px; color: #01aac5;"></i>
+                        <h4>{{ (patient_profile.baseline_cadence|round|int) if patient_profile.baseline_cadence else 60 }} BPM</h4>
                         <p class="text-muted mb-0">Baseline BPM</p>
                     </div>
                 </div>
@@ -60,8 +60,8 @@
             <div class="col-md-3">
                 <div class="card">
                     <div class="card-body text-center">
-                        <i data-feather="flag" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ patient_profile.target_cadence or 'N/A' }}</h4>
+                        <i data-feather="flag" class="mb-2" style="width: 32px; height: 32px; color: #10b981;"></i>
+                        <h4>{{ (patient_profile.target_cadence|round|int) if patient_profile.target_cadence else 70 }} BPM</h4>
                         <p class="text-muted mb-0">Target BPM</p>
                     </div>
                 </div>

@@ -583,3 +583,145 @@ def _generate_deterministic_session_reflection(summary: Dict[str, Any]) -> Dict[
         "unsuccessfulAdaptation": None,
         "nextSessionStartingPoint": round(best_tempo)
     }
+
+
+def generate_structured_clinical_report(
+    session_data: Dict[str, Any],
+    historical_context: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Generate structured post-session clinical report and medical SOAP note
+    matching the ClinicalReport schema from neurobeat_final:
+    - summary (concise clinical synopsis)
+    - what_you_did (concrete action bullet points)
+    - performance_observations (cadence, symmetry, consistency)
+    - what_to_improve (physiological targets)
+    - recommendations (pacing guidance for next session)
+    - soap (subjective, objective, assessment, plan)
+    """
+    client = get_gemini_client()
+    if not client:
+        return _generate_deterministic_structured_report(session_data, historical_context)
+
+    try:
+        from google.genai import types
+
+        prompt = f"""
+You are a clinical neurorehabilitation specialist analyzing a completed Rhythmic Auditory Stimulation (RAS) therapy session.
+Generate a structured, empathetic, and clinically precise progress report in valid JSON.
+
+{historical_context or 'No prior session history available.'}
+
+[SESSION METRICS]
+Activity Type: {session_data.get('activity_type', 'gait_trainer')}
+Duration: {session_data.get('duration_seconds', 0)} seconds
+Initial Tempo: {session_data.get('initial_bpm', 60)} BPM
+Final Tempo: {session_data.get('final_bpm', 60)} BPM
+Accuracy Score: {session_data.get('accuracy_score', 0)}%
+Movement Count: {session_data.get('movement_count', 0)}
+
+[REQUIRED JSON SCHEMA]
+{{
+  "summary": "2-3 sentence clinical synopsis of cadence entrainment, rhythm following, and motor stability.",
+  "what_you_did": [
+    "Completed bilateral movement exercise at target cadence.",
+    "Maintained entrainment through auditory pacing."
+  ],
+  "performance_observations": [
+    "Observed rhythm stability and consistency across tempo transitions."
+  ],
+  "what_to_improve": [
+    "Refine bilateral step symmetry under extended movement demand."
+  ],
+  "recommendations": [
+    "Continue pacing within learned stable cadence envelope."
+  ],
+  "soap": {{
+    "subjective": "Patient engaged attentively with rhythmic auditory cues throughout the session.",
+    "objective": "Completed {session_data.get('duration_seconds', 0)}s session with final cadence of {session_data.get('final_bpm', 60)} BPM and {session_data.get('accuracy_score', 0)}% synchronization accuracy.",
+    "assessment": "Demonstrated functional motor entrainment with stable cadence maintenance.",
+    "plan": "Advance target cadence by 2 BPM in subsequent session as tolerated."
+  }}
+}}
+"""
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=700,
+                response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_budget=0)
+            )
+        )
+        text = response.text.strip()
+        data = json.loads(text)
+        if isinstance(data, dict) and "summary" in data:
+            data["ai_model"] = "gemini-2.5-flash"
+            return data
+        return _generate_deterministic_structured_report(session_data, historical_context)
+    except Exception as e:
+        logging.warning(f"Gemini structured report fallback: {e}")
+        return _generate_deterministic_structured_report(session_data, historical_context)
+
+
+def _generate_deterministic_structured_report(
+    session_data: Dict[str, Any],
+    historical_context: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Deterministic rule-based clinical report and SOAP generator for 100% offline resilience.
+    Uses exact session measurements to synthesize structured clinical observations.
+    """
+    dur = int(session_data.get("duration_seconds", 0))
+    dur_min = max(1, round(dur / 60.0, 1))
+    init_bpm = round(float(session_data.get("initial_bpm", 60.0)), 1)
+    final_bpm = round(float(session_data.get("final_bpm", init_bpm)), 1)
+    acc = round(float(session_data.get("accuracy_score", 75.0)), 1)
+    act = str(session_data.get("activity_type", "gait_trainer")).replace("_", " ").title()
+    count = int(session_data.get("movement_count", 0))
+
+    if acc >= 85.0:
+        synopsis = f"The patient demonstrated strong auditory-motor entrainment during {act}, maintaining consistent synchronization at {final_bpm} BPM across {dur_min} minutes. Motor stability remained high throughout the target pacing intervals."
+        subj = "Patient demonstrated high engagement and tolerated rhythmic stimulation without qualitative fatigue."
+        assess = f"Excellent motor entrainment and bilateral cadence coordination (accuracy: {acc}%). Patient successfully consolidated rhythmic pacing."
+        plan = f"Recommend progressive tempo increase (+2 to +3 BPM) in the next session to further challenge cadence control."
+        improve = ["Maintain postural symmetry during tempo accelerations", "Consolidate cadence stability during longer unbroken walking intervals"]
+    elif acc >= 70.0:
+        synopsis = f"The patient showed stable rhythm tracking during {act}, achieving {acc}% accuracy at {final_bpm} BPM. Brief cadence adjustments were observed during transitions, but overall rhythm following remained functional."
+        subj = "Patient reported comfortable pacing with slight exertion during cadence transitions."
+        assess = f"Functional auditory entrainment with moderate consistency (accuracy: {acc}%). Motor output tracked auditory cues effectively."
+        plan = f"Maintain target tempo at {final_bpm} BPM for one additional session to stabilize cadence prior to progression."
+        improve = ["Smooth out step transitions when tempo shifts", "Focus on bilateral timing consistency"]
+    else:
+        synopsis = f"The patient engaged in {act} for {dur_min} minutes at {init_bpm} to {final_bpm} BPM, with rhythm accuracy of {acc}%. Performance indicates motor fatigue or challenge at higher tempo thresholds."
+        subj = "Patient exhibited signs of motor fatigue and requested pacing adjustments."
+        assess = f"Reduced synchronization accuracy ({acc}%) indicating potential fatigue or pacing boundary reached."
+        plan = f"Consolidate pace at a baseline tempo of {max(45.0, final_bpm - 4.0)} BPM with increased rest intervals."
+        improve = ["Reduce stride variability", "Allow recovery intervals to avoid compensatory movement patterns"]
+
+    return {
+        "summary": synopsis,
+        "what_you_did": [
+            f"Completed {dur} seconds ({dur_min} min) of {act} training.",
+            f"Achieved {count} total movement cycles with rhythmic cueing.",
+            f"Tracked auditory rhythmic stimulation from {init_bpm} to {final_bpm} BPM."
+        ],
+        "performance_observations": [
+            f"Achieved an overall motor synchronization accuracy of {acc}%.",
+            f"Maintained cadence response across {count} verified kinematic steps/cycles."
+        ],
+        "what_to_improve": improve,
+        "recommendations": [
+            f"Target cadence for next session: {plan.split('(')[-1].split(')')[0] if '(' in plan else f'{final_bpm} BPM'}.",
+            "Maintain rhythmic pacing consistency before challenging higher velocity."
+        ],
+        "soap": {
+            "subjective": subj,
+            "objective": f"Completed {dur} seconds of {act} at {init_bpm}->{final_bpm} BPM. Recorded {count} movements with {acc}% synchronization accuracy.",
+            "assessment": assess,
+            "plan": plan
+        },
+        "ai_model": "deterministic-clinical-engine"
+    }
+

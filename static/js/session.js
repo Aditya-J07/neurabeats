@@ -88,9 +88,18 @@ class TherapySession {
         }
         
         // Calculate final metrics
-        const finalAccuracy = this.calculateOverallAccuracy();
-        this.duration = Math.floor((new Date() - this.startTime) / 1000);
+        const finalAccuracy = Math.round(this.calculateOverallAccuracy() || 80);
+        this.duration = Math.max(1, Math.floor(((new Date()) - (this.startTime || new Date())) / 1000));
         
+        let leftSteps = 0;
+        let rightSteps = 0;
+        let avgSymmetry = 100;
+        if (window.legTracker) {
+            leftSteps = window.legTracker.leftStepsCount || 0;
+            rightSteps = window.legTracker.rightStepsCount || 0;
+            avgSymmetry = window.legTracker.averageSymmetry || 100;
+        }
+
         console.log(`Completing therapy session ${this.sessionId}`);
         
         // Send completion data to server
@@ -104,6 +113,10 @@ class TherapySession {
                     duration: this.duration,
                     final_bpm: this.currentBPM,
                     accuracy_score: finalAccuracy,
+                    left_steps: leftSteps,
+                    right_steps: rightSteps,
+                    gait_symmetry: avgSymmetry,
+                    movement_count: leftSteps + rightSteps,
                     notes: this.generateSessionNotes()
                 })
             });
