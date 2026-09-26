@@ -126,28 +126,41 @@ export class MovementIntelligence {
       return null;
     }
 
+    const safeNum = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+
     const leftHip = rawLandmarks[23];
     const rightHip = rawLandmarks[24];
     const leftShoulder = rawLandmarks[11];
     const rightShoulder = rawLandmarks[12];
 
+    const lHipX = safeNum(leftHip?.x, 0.46);
+    const rHipX = safeNum(rightHip?.x, 0.54);
+    const lHipY = safeNum(leftHip?.y, 0.55);
+    const rHipY = safeNum(rightHip?.y, 0.55);
+
     // Pelvis Center
-    const hipCenterX = ((leftHip?.x ?? 0.5) + (rightHip?.x ?? 0.5)) / 2.0;
-    const hipCenterY = ((leftHip?.y ?? 0.6) + (rightHip?.y ?? 0.6)) / 2.0;
+    const hipCenterX = (lHipX + rHipX) / 2.0;
+    const hipCenterY = (lHipY + rHipY) / 2.0;
 
     // Torso Length as Body Scale Reference
     let torsoLength = 0.25;
     if (leftShoulder && rightShoulder) {
-      const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2.0;
-      const shoulderCenterY = (leftShoulder.y + rightShoulder.y) / 2.0;
+      const lShX = safeNum(leftShoulder.x, 0.45);
+      const rShX = safeNum(rightShoulder.x, 0.55);
+      const lShY = safeNum(leftShoulder.y, 0.30);
+      const rShY = safeNum(rightShoulder.y, 0.30);
+      const shoulderCenterX = (lShX + rShX) / 2.0;
+      const shoulderCenterY = (lShY + rShY) / 2.0;
       torsoLength = Math.hypot(shoulderCenterX - hipCenterX, shoulderCenterY - hipCenterY);
     } else if (leftHip && rightHip) {
-      torsoLength = Math.hypot(leftHip.x - rightHip.x, leftHip.y - rightHip.y) * 1.5;
+      torsoLength = Math.hypot(lHipX - rHipX, lHipY - rHipY) * 1.5;
     }
 
-    const clampedTorso = Math.max(0.10, Math.min(0.85, torsoLength || 0.25));
-    this.smoothedScale = 0.10 * clampedTorso + 0.90 * this.smoothedScale;
-    const S = this.smoothedScale;
+    const validTorso = Number.isFinite(torsoLength) && torsoLength > 0.01 ? torsoLength : 0.25;
+    const clampedTorso = Math.max(0.10, Math.min(0.85, validTorso));
+    const prevScale = Number.isFinite(this.smoothedScale) ? this.smoothedScale : 0.25;
+    this.smoothedScale = 0.10 * clampedTorso + 0.90 * prevScale;
+    const S = this.smoothedScale > 0.05 ? this.smoothedScale : 0.25;
 
     const normalizedLandmarks = new Array(rawLandmarks.length);
     for (let i = 0; i < rawLandmarks.length; i++) {
@@ -156,11 +169,17 @@ export class MovementIntelligence {
         normalizedLandmarks[i] = { x: 0, y: 0, z: 0, visibility: 0 };
         continue;
       }
+      const lx = safeNum(lm.x, hipCenterX);
+      const ly = safeNum(lm.y, hipCenterY);
+      const lz = safeNum(lm.z, 0);
+      const rawVis = typeof lm.visibility === 'number' ? lm.visibility : (lm.presence ?? 1.0);
+      const lvis = safeNum(rawVis, 0.0);
+
       normalizedLandmarks[i] = {
-        x: (lm.x - hipCenterX) / S,
-        y: -(lm.y - hipCenterY) / S, // Positive Y = upward
-        z: (lm.z || 0) / S,
-        visibility: typeof lm.visibility === 'number' ? lm.visibility : (lm.presence ?? 1.0)
+        x: (lx - hipCenterX) / S,
+        y: -(ly - hipCenterY) / S, // Positive Y = upward
+        z: lz / S,
+        visibility: Math.max(0.0, Math.min(1.0, lvis))
       };
     }
 
@@ -497,7 +516,9 @@ export class MovementIntelligence {
     let visSum = 0;
     for (let idx of jointIndices) {
       const lm = rawLandmarks[idx];
-      visSum += (typeof lm?.visibility === 'number' ? lm.visibility : (lm?.presence ?? 1.0));
+      const rawVis = (typeof lm?.visibility === 'number' ? lm.visibility : (lm?.presence ?? 1.0));
+      const vis = (typeof rawVis === 'number' && Number.isFinite(rawVis)) ? rawVis : 0.0;
+      visSum += Math.max(0.0, Math.min(1.0, vis));
     }
     const avgVisibility = visSum / jointIndices.length;
 
@@ -505,7 +526,7 @@ export class MovementIntelligence {
     const bufferSufficiency = Math.min(1.0, this.buffer.length / this.config.minFramesForMetrics);
 
     const confidence = (0.60 * avgVisibility) + (0.40 * bufferSufficiency);
-    return Number(Math.max(0.0, Math.min(1.0, confidence)).toFixed(3));
+    return Number(Math.max(0.0, Math.min(1.0, Number.isFinite(confidence) ? confidence : 0.0)).toFixed(3));
   }
 
   /**

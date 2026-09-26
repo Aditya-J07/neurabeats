@@ -398,9 +398,10 @@ def generate_agent_reasoning(context: Dict[str, Any]) -> Dict[str, Any]:
     if not client:
         return _generate_deterministic_agent_reasoning(context)
 
-    from google.genai import types
+    try:
+        from google.genai import types
 
-    prompt = f"""You are the Nuro Agent closed-loop reasoning advisor for a rhythmic neurorehabilitation session.
+        prompt = f"""You are the Nuro Agent closed-loop reasoning advisor for a rhythmic neurorehabilitation session.
 Analyze the compact performance context below and recommend the next adaptive action.
 
 STRICT CONSTRAINTS:
@@ -426,7 +427,6 @@ STRICT CONSTRAINTS:
 }}
 """
 
-    try:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
@@ -507,9 +507,10 @@ def generate_agent_session_reflection(session_summary: Dict[str, Any]) -> Dict[s
     if not client:
         return _generate_deterministic_session_reflection(session_summary)
 
-    from google.genai import types
+    try:
+        from google.genai import types
 
-    prompt = f"""You are the Nuro Agent session reflection analyst.
+        prompt = f"""You are the Nuro Agent session reflection analyst.
 Generate an end-of-session structured reflection based strictly on the measured session metrics below.
 
 STRICT CONSTRAINTS:
@@ -531,7 +532,6 @@ STRICT CONSTRAINTS:
 }}
 """
 
-    try:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,

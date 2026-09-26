@@ -216,13 +216,11 @@ class CausalMultiScaleTCN(nn.Module):
 
         # Circular Phase Head: raw [sin, cos]
         phase_raw = self.phase_head(embedding)
-        sin_raw = phase_raw[:, 0:1]
-        cos_raw = phase_raw[:, 1:2]
 
-        # Normalize to unit circle: sin^2 + cos^2 = 1
-        norm = torch.sqrt(sin_raw ** 2 + cos_raw ** 2 + 1e-8)
-        phase_sin = sin_raw / norm
-        phase_cos = cos_raw / norm
+        # Normalize to unit circle: sin^2 + cos^2 = 1 (F.normalize with eps=1e-5 avoids zero-division NaN)
+        phase_norm = F.normalize(phase_raw, p=2, dim=-1, eps=1e-5)
+        phase_sin = phase_norm[:, 0:1]
+        phase_cos = phase_norm[:, 1:2]
 
         # Circular Phase angle theta in [-pi, pi]
         phase_radians = torch.atan2(phase_sin, phase_cos)
@@ -450,7 +448,7 @@ def export_to_onnx(
     model: nn.Module,
     output_path: str,
     window_size: int = DEFAULT_WINDOW_SIZE,
-    opset_version: int = 17,
+    opset_version: int = 18,
 ) -> str:
     """
     Exports CausalMultiScaleTCN to ONNX format with dynamic batch and time dimensions.

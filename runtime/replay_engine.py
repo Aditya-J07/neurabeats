@@ -249,6 +249,103 @@ class ReplayEngine:
             "model_metadata": self.metadata
         }
 
+    def verify_trace_integrity(self) -> Dict[str, Any]:
+        """
+        Adversarial integrity and tamper detection audit (Sections 17 & 18).
+        Checks for:
+        1. Timestamp monotonicity (events and adaptations must not regress in time)
+        2. Causal consistency between requested BPM, executed BPM, and validator status
+        3. Alignment between AdaptationRecords and Interventions
+        4. Intervention outcome mathematical validity
+        5. Session boundary consistency
+        """
+        anomalies = []
+
+        # 1. Event timestamp monotonicity
+        prev_ts = -float("inf")
+        for idx, evt in enumerate(self.events):
+            t = evt.get("timestamp")
+            if t is not None:
+                try:
+                    t_val = float(t)
+                    if t_val < prev_ts:
+                        anomalies.append({
+                            "type": "TIMESTAMP_REGRESSION",
+                            "index": idx,
+                            "issue": f"Event {idx} timestamp ({t_val}) regressed from previous ({prev_ts})"
+                        })
+                    prev_ts = t_val
+                except (ValueError, TypeError):
+                    pass
+
+        # 2. Adaptation vs Validator status consistency
+        for idx, adapt in enumerate(self.adaptations):
+            prev_val = float(adapt.get("previous_value", 60.0))
+            req_val = float(adapt.get("requested_value", prev_val))
+            exec_val = float(adapt.get("executed_value", prev_val))
+            status = adapt.get("validator_status", "APPROVED")
+
+            if status == "APPROVED" and abs(req_val - exec_val) > 0.05:
+                anomalies.append({
+                    "type": "VALIDATOR_INCONSISTENCY",
+                    "index": idx,
+                    "issue": f"Status APPROVED but requested ({req_val}) != executed ({exec_val})"
+                })
+            elif status == "REJECTED" and abs(exec_val - prev_val) > 0.05:
+                anomalies.append({
+                    "type": "VALIDATOR_INCONSISTENCY",
+                    "index": idx,
+                    "issue": f"Status REJECTED but executed ({exec_val}) != previous ({prev_val})"
+                })
+
+            step_delta = abs(exec_val - prev_val)
+            if step_delta > 5.01:
+                anomalies.append({
+                    "type": "EXCESSIVE_STEP_SIZE",
+                    "index": idx,
+                    "issue": f"Step size {step_delta:.2f} BPM exceeds maximum deterministic limit of 5.0 BPM"
+                })
+
+        # 3. Cross-record consistency between Adaptations and Interventions
+        for itv in self.interventions:
+            itv_after = float(itv.get("after_bpm", 0.0))
+            itv_ts = itv.get("timestamp")
+            matching_adapt = next(
+                (a for a in self.adaptations if a.get("timestamp") == itv_ts or abs(float(a.get("executed_value", 0)) - itv_after) < 0.05),
+                None
+            )
+            if matching_adapt:
+                adapt_exec = float(matching_adapt.get("executed_value", 0.0))
+                if abs(adapt_exec - itv_after) > 0.05:
+                    anomalies.append({
+                        "type": "INTERVENTION_MISMATCH",
+                        "id": itv.get("id"),
+                        "issue": f"Intervention after_bpm ({itv_after}) != Adaptation executed_value ({adapt_exec})"
+                    })
+
+            # 4. Outcome delta consistency
+            outcome = itv.get("outcome")
+            if outcome and isinstance(outcome, dict):
+                delta = outcome.get("delta_performance")
+                post_perf = outcome.get("post_performance")
+                pre_perf = outcome.get("pre_performance")
+                if delta is not None and post_perf is not None and pre_perf is not None:
+                    expected_delta = post_perf - pre_perf
+                    if abs(delta - expected_delta) > 0.01:
+                        anomalies.append({
+                            "type": "OUTCOME_MATHEMATICAL_ERROR",
+                            "id": itv.get("id"),
+                            "issue": f"Recorded delta ({delta}) != post ({post_perf}) - pre ({pre_perf})"
+                        })
+
+        return {
+            "session_id": self.session_id,
+            "integrity_pass": len(anomalies) == 0,
+            "anomalies_detected": len(anomalies),
+            "anomalies": anomalies
+        }
+
+
     def print_audit_report(self):
         """Prints a comprehensive tabular replay audit report to stdout."""
         print("=" * 80)

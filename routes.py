@@ -1,4 +1,5 @@
 from flask import render_template, request, redirect, url_for, session, flash, jsonify
+from werkzeug.exceptions import HTTPException
 from app import app, db
 from models import (
     User, PatientProfile, ClinicianProfile, TherapySession, SessionMetrics, BaselineAssessment,
@@ -435,82 +436,112 @@ def session_view(session_id):
         performance_envelope=envelope_dict
     )
 
-@app.route('/session/update', methods=['POST'])
-def update_session():
-    """Update session metrics in real-time with P2/P5 persistence"""
+def _can_access_patient(user, patient):
+    """Centralized authorization check for patient access"""
+    if not user or not patient:
+        return False
+    if user.user_type == 'patient':
+        return patient.user_id == user.id
+    if user.user_type == 'clinician':
+        if patient.assigned_clinician_id is not None and patient.assigned_clinician_id != user.id:
+            return False
+        return True
+    return False
+
+def _can_access_session(user, therapy_session):
+    """Centralized authorization check for session access"""
+    if not user or not therapy_session:
+        return False
+    return _can_access_patient(user, therapy_session.patient)
+
+def _execute_session_update(session_id, data):
+    """Authoritative handler for session update with ownership and P2/P5 persistence"""
     if 'user_id' not in session or session.get('user_type') != 'patient':
         return jsonify({'error': 'Unauthorized'}), 401
 
-    try:
-        session_id = int(request.json.get('session_id'))
-        current_bpm = float(request.json.get('current_bpm'))
-        sync_accuracy = float(request.json.get('sync_accuracy', 0))
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
 
-        # Add session metric
-        metric = SessionMetrics(
-            session_id=session_id,
-            current_bpm=current_bpm,
-            sync_accuracy=sync_accuracy,
-            timestamp=datetime.utcnow()
-        )
-        db.session.add(metric)
+    therapy_session = TherapySession.query.get_or_404(session_id)
+    if not _can_access_session(user, therapy_session):
+        return jsonify({'error': 'Forbidden: Session does not belong to user'}), 403
 
-        # Calculate BPM adjustment based on adaptive engine recommendation or accuracy
-        suggested_bpm = request.json.get('suggested_bpm')
-        if suggested_bpm is not None:
-            try:
-                adjustment_bpm = max(40.0, min(140.0, float(suggested_bpm)))
-            except (ValueError, TypeError):
-                adjustment_bpm = current_bpm
-        else:
+    current_bpm = float(data.get('current_bpm', therapy_session.initial_bpm))
+    sync_accuracy = float(data.get('sync_accuracy', 0))
+
+    # Add session metric
+    metric = SessionMetrics(
+        session_id=session_id,
+        current_bpm=current_bpm,
+        sync_accuracy=sync_accuracy,
+        timestamp=datetime.utcnow()
+    )
+    db.session.add(metric)
+
+    # Calculate BPM adjustment based on adaptive engine recommendation or accuracy
+    suggested_bpm = data.get('suggested_bpm')
+    if suggested_bpm is not None:
+        try:
+            adjustment_bpm = max(40.0, min(140.0, float(suggested_bpm)))
+        except (ValueError, TypeError):
             adjustment_bpm = current_bpm
-            if sync_accuracy < 70:  # If accuracy is low, slow down slightly
-                adjustment_bpm = max(current_bpm - 2, 40)
-            elif sync_accuracy > 90:  # If accuracy is high, speed up slightly
-                adjustment_bpm = min(current_bpm + 1, 120)
+    else:
+        adjustment_bpm = current_bpm
+        if sync_accuracy < 70:
+            adjustment_bpm = max(current_bpm - 2, 40)
+        elif sync_accuracy > 90:
+            adjustment_bpm = min(current_bpm + 1, 120)
 
-        if adjustment_bpm != current_bpm:
-            metric.adjustment_made = True
+    if adjustment_bpm != current_bpm:
+        metric.adjustment_made = True
 
-        # Hardened Persistence: Ingest Adaptation Record if provided
-        ad_record_data = request.json.get('adaptation_record')
-        if ad_record_data and isinstance(ad_record_data, dict):
-            ar = AdaptationRecord(
-                session_id=session_id,
-                parameter=ad_record_data.get('parameter', 'TEMPO'),
-                previous_value=float(ad_record_data.get('previous_value', current_bpm)),
-                requested_value=float(ad_record_data.get('requested_value', current_bpm)),
-                executed_value=float(ad_record_data.get('executed_value', current_bpm)),
-                direction=ad_record_data.get('direction', 'MAINTAIN'),
-                trigger_reason=ad_record_data.get('trigger_reason', 'Automated adaptation'),
-                validator_status=ad_record_data.get('validator_status', 'APPROVED'),
-                clamp_reason=ad_record_data.get('clamp_reason'),
-                confidence=float(ad_record_data.get('confidence', 1.0))
-            )
-            db.session.add(ar)
+    # Hardened Persistence: Ingest Adaptation Record if provided
+    ad_record_data = data.get('adaptation_record') or data.get('adaptation_decision')
+    if ad_record_data and isinstance(ad_record_data, dict):
+        ar = AdaptationRecord(
+            session_id=session_id,
+            parameter=ad_record_data.get('parameter', 'TEMPO'),
+            previous_value=float(ad_record_data.get('previous_value', current_bpm)),
+            requested_value=float(ad_record_data.get('requested_value', current_bpm)),
+            executed_value=float(ad_record_data.get('executed_value', current_bpm)),
+            direction=ad_record_data.get('direction', 'MAINTAIN'),
+            trigger_reason=ad_record_data.get('trigger_reason', 'Automated adaptation'),
+            validator_status=ad_record_data.get('validator_status', 'APPROVED'),
+            clamp_reason=ad_record_data.get('clamp_reason'),
+            confidence=float(ad_record_data.get('confidence', 1.0))
+        )
+        db.session.add(ar)
 
-        # Hardened Persistence: Ingest Agent Decision if provided
-        agent_dec_data = request.json.get('agent_decision')
-        if agent_dec_data and isinstance(agent_dec_data, dict) and agent_dec_data.get('action'):
-            ag = AgentDecision(
-                session_id=session_id,
-                intent=agent_dec_data.get('intent', 'MAINTAIN'),
-                target=agent_dec_data.get('target', 'TEMPO'),
-                action=agent_dec_data.get('action', 'MAINTAIN'),
-                requested_magnitude=float(agent_dec_data.get('magnitude') or agent_dec_data.get('requested_magnitude') or 0.0),
-                reasoning_summary=agent_dec_data.get('reason') or agent_dec_data.get('reasoning_summary') or '',
-                confidence=float(agent_dec_data.get('confidence', 0.9)),
-                validator_result=agent_dec_data.get('validator_result', 'APPROVED')
-            )
-            db.session.add(ag)
+    # Hardened Persistence: Ingest Agent Decision if provided
+    agent_dec_data = data.get('agent_decision')
+    if agent_dec_data and isinstance(agent_dec_data, dict) and agent_dec_data.get('action'):
+        ag = AgentDecision(
+            session_id=session_id,
+            intent=agent_dec_data.get('intent', 'MAINTAIN'),
+            target=agent_dec_data.get('target', 'TEMPO'),
+            action=agent_dec_data.get('action', 'MAINTAIN'),
+            requested_magnitude=float(agent_dec_data.get('magnitude') or agent_dec_data.get('requested_magnitude') or 0.0),
+            reasoning_summary=agent_dec_data.get('reason') or agent_dec_data.get('reasoning_summary') or '',
+            confidence=float(agent_dec_data.get('confidence', 0.9)),
+            validator_result=agent_dec_data.get('validator_result', 'APPROVED')
+        )
+        db.session.add(ag)
 
-        db.session.commit()
+    db.session.commit()
 
-        return jsonify({
-            'adjusted_bpm': adjustment_bpm,
-            'sync_accuracy': sync_accuracy
-        })
+    return jsonify({
+        'adjusted_bpm': adjustment_bpm,
+        'sync_accuracy': sync_accuracy
+    })
 
+@app.route('/session/update', methods=['POST'])
+def update_session():
+    """Update session metrics in real-time with P2/P5 persistence"""
+    try:
+        data = request.get_json(silent=True) or {}
+        session_id = int(data.get('session_id'))
+        return _execute_session_update(session_id, data)
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error updating session: {str(e)}")
@@ -518,41 +549,12 @@ def update_session():
 
 @app.route('/session/<int:session_id>/update', methods=['POST'])
 def update_session_legacy(session_id):
-    """Update session metrics in real-time"""
-    if 'user_id' not in session or session.get('user_type') != 'patient':
-        return jsonify({'error': 'Unauthorized'}), 401
-
+    """Compatibility route: delegates to unified authoritative _execute_session_update"""
     try:
-        current_bpm = float(request.json.get('current_bpm'))
-        sync_accuracy = float(request.json.get('sync_accuracy', 0))
-
-        # Add session metric
-        metric = SessionMetrics(
-            session_id=session_id,
-            current_bpm=current_bpm,
-            sync_accuracy=sync_accuracy,
-            timestamp=datetime.utcnow()
-        )
-        db.session.add(metric)
-
-        # Calculate BPM adjustment based on accuracy
-        adjustment_bpm = current_bpm
-        if sync_accuracy < 70:  # If accuracy is low, slow down slightly
-            adjustment_bpm = max(current_bpm - 2, 40)
-        elif sync_accuracy > 90:  # If accuracy is high, speed up slightly
-            adjustment_bpm = min(current_bpm + 1, 120)
-
-        if adjustment_bpm != current_bpm:
-            metric.adjustment_made = True
-
-        db.session.commit()
-
-        return jsonify({
-            'adjusted_bpm': adjustment_bpm,
-            'sync_accuracy': sync_accuracy
-        })
-
+        data = request.get_json(silent=True) or {}
+        return _execute_session_update(session_id, data)
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error updating session: {str(e)}")
         return jsonify({'error': 'Failed to update session'}), 500
 
@@ -567,29 +569,30 @@ def complete_session(session_id):
         user = User.query.get(session['user_id'])
 
         # Verify session belongs to current patient
-        if therapy_session.patient.user_id != user.id:
-            return jsonify({'error': 'Unauthorized'}), 401
+        if not user or not _can_access_session(user, therapy_session):
+            return jsonify({'error': 'Forbidden: Access denied'}), 403
 
         # Update session completion data
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
         therapy_session.end_time = datetime.utcnow()
         therapy_session.completed = True
-        duration = int(request.json.get('duration', 0))
-        final_bpm = float(request.json.get('final_bpm', therapy_session.initial_bpm))
-        accuracy_score = float(request.json.get('accuracy_score', 0))
-        left_steps = int(request.json.get('left_steps', 0))
-        right_steps = int(request.json.get('right_steps', 0))
-        gait_symmetry = float(request.json.get('gait_symmetry', 0))
+        duration = int(data.get('duration', 0))
+        final_bpm = float(data.get('final_bpm', therapy_session.initial_bpm))
+        accuracy_score = float(data.get('accuracy_score', 0))
+        left_steps = int(data.get('left_steps', 0))
+        right_steps = int(data.get('right_steps', 0))
+        gait_symmetry = float(data.get('gait_symmetry', 0))
 
         therapy_session.duration_seconds = duration
         therapy_session.final_bpm = final_bpm
         therapy_session.accuracy_score = accuracy_score
-        therapy_session.notes = request.json.get('notes', '')
+        therapy_session.notes = data.get('notes', '')
 
-        tap_count = int(request.json.get('tap_count', 0))
-        tap_cadence = float(request.json.get('tap_cadence', 0))
-        posture_stability = float(request.json.get('posture_stability', 100 if therapy_session.session_type == 'balance_training' else 0))
+        tap_count = int(data.get('tap_count', 0))
+        tap_cadence = float(data.get('tap_cadence', 0))
+        posture_stability = float(data.get('posture_stability', 100 if therapy_session.session_type == 'balance_training' else 0))
 
-        metrics_dict = request.json.get('metrics_data', {})
+        metrics_dict = data.get('metrics_data', {})
         if not isinstance(metrics_dict, dict):
             metrics_dict = {}
         metrics_dict['left_steps'] = left_steps
@@ -602,7 +605,7 @@ def complete_session(session_id):
 
         # Generate Nuro Agent session reflection
         from services.gemini_service import generate_patient_feedback_few_shot, generate_agent_session_reflection
-        agent_summary = metrics_dict.get('agent_summary') or request.json.get('summary') or {
+        agent_summary = data.get('agent_summary') or metrics_dict.get('agent_summary') or data.get('summary') or {
             'sessionId': session_id,
             'duration': duration,
             'endingPerformance': accuracy_score / 100.0 if accuracy_score else 0.8,
@@ -624,7 +627,8 @@ def complete_session(session_id):
         sess_summary.improvement = float(agent_summary.get('improvement') or 0.0)
         sess_summary.average_movement_quality = float(agent_summary.get('averageMovementQuality') or (accuracy_score / 100.0))
         sess_summary.average_rhythm_sync = float(agent_summary.get('averageRhythmSync') or (accuracy_score / 100.0))
-        sess_summary.average_confidence = float(agent_summary.get('averageConfidence') or 0.9)
+        raw_conf = agent_summary.get('averageConfidence')
+        sess_summary.average_confidence = float(raw_conf) if raw_conf is not None else 0.9
         sess_summary.best_tempo = float(agent_summary.get('bestTempo') or final_bpm)
         sess_summary.successful_tempo_range = str(agent_summary.get('successfulTempoRange') or f"{round(final_bpm)} BPM")
         sess_summary.successful_adaptations = int(agent_summary.get('successfulAdaptations') or 0)
@@ -632,34 +636,50 @@ def complete_session(session_id):
         sess_summary.performance_trend = str(agent_summary.get('performanceTrend') or 'STABLE')
         sess_summary.agent_reflection_json = json.dumps(agent_reflection)
 
-        # 2. Multi-Session Memory: Update PatientPerformanceEnvelope via EMA (alpha = 0.15)
+        # 2. Multi-Session Memory: Update PatientPerformanceEnvelope
         st = therapy_session.session_type
         envelope = PatientPerformanceEnvelope.query.filter_by(
             patient_id=therapy_session.patient_id,
             exercise_type=st
         ).first()
 
-        if not envelope:
-            envelope = PatientPerformanceEnvelope(
-                patient_id=therapy_session.patient_id,
-                exercise_type=st,
-                stable_bpm_min=min(therapy_session.initial_bpm, final_bpm),
-                stable_bpm_max=max(therapy_session.initial_bpm, final_bpm) if accuracy_score >= 75 else therapy_session.initial_bpm,
-                typical_cadence=final_bpm if accuracy_score >= 75 else therapy_session.initial_bpm,
-                sessions_evaluated=1,
-                confidence=min(1.0, (accuracy_score / 100.0))
-            )
-            db.session.add(envelope)
-        else:
-            alpha = 0.15
-            envelope.typical_cadence = (1.0 - alpha) * (envelope.typical_cadence or final_bpm) + alpha * final_bpm
-            if accuracy_score >= 80:
-                envelope.stable_bpm_max = max(envelope.stable_bpm_max, final_bpm)
-            if accuracy_score <= 60:
-                envelope.stable_bpm_min = min(envelope.stable_bpm_min, final_bpm)
-            envelope.sessions_evaluated += 1
-            envelope.confidence = min(0.98, envelope.confidence + 0.05)
-            envelope.updated_at = datetime.utcnow()
+        # Section 15: Memory Protection Guard against corrupted/incomplete/degraded evidence
+        is_valid_observation = (
+            data.get('status') != 'ABANDONED' and
+            not data.get('abandoned', False) and
+            duration >= 15.0 and
+            0.0 <= accuracy_score <= 100.0 and
+            40.0 <= final_bpm <= 140.0 and
+            sess_summary.average_confidence >= 0.45
+        )
+
+        if is_valid_observation:
+            if not envelope:
+                envelope = PatientPerformanceEnvelope(
+                    patient_id=therapy_session.patient_id,
+                    exercise_type=st,
+                    stable_bpm_min=min(therapy_session.initial_bpm, final_bpm),
+                    stable_bpm_max=max(therapy_session.initial_bpm, final_bpm) if accuracy_score >= 75 else therapy_session.initial_bpm,
+                    typical_cadence=final_bpm if accuracy_score >= 75 else therapy_session.initial_bpm,
+                    sessions_evaluated=1,
+                    confidence=min(1.0, (accuracy_score / 100.0))
+                )
+                db.session.add(envelope)
+            else:
+                alpha = 0.15
+                envelope.typical_cadence = (1.0 - alpha) * (envelope.typical_cadence or final_bpm) + alpha * final_bpm
+                if accuracy_score >= 80:
+                    envelope.stable_bpm_max = max(envelope.stable_bpm_max, final_bpm)
+                elif accuracy_score <= 60:
+                    # Degradation at high tempo means upper ceiling must be respected
+                    if final_bpm >= (envelope.typical_cadence or 60.0):
+                        envelope.stable_bpm_max = min(envelope.stable_bpm_max, max(final_bpm - 1.0, envelope.stable_bpm_min))
+                    else:
+                        envelope.stable_bpm_min = max(envelope.stable_bpm_min, min(final_bpm + 1.0, envelope.stable_bpm_max))
+
+                envelope.sessions_evaluated += 1
+                envelope.confidence = min(0.98, envelope.confidence + 0.05)
+                envelope.updated_at = datetime.utcnow()
 
         # 3. Emit session completion lifecycle event
         comp_event = SessionEvent(
@@ -706,7 +726,7 @@ def complete_session(session_id):
                 'stable_bpm_max': envelope.stable_bpm_max,
                 'typical_cadence': envelope.typical_cadence,
                 'sessions_evaluated': envelope.sessions_evaluated
-            },
+            } if envelope else None,
             'left_steps': left_steps,
             'right_steps': right_steps,
             'gait_symmetry': gait_symmetry,
@@ -715,6 +735,9 @@ def complete_session(session_id):
             'posture_stability': posture_stability
         })
 
+    except HTTPException as he:
+        db.session.rollback()
+        return jsonify({'error': he.description}), he.code
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error completing session: {str(e)}", exc_info=True)
@@ -727,7 +750,11 @@ def push_session_events(session_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
+        user = User.query.get(session['user_id'])
         therapy_session = TherapySession.query.get_or_404(session_id)
+        if not user or not _can_access_session(user, therapy_session):
+            return jsonify({'error': 'Forbidden: Access denied'}), 403
+
         data = request.get_json(silent=True) or {}
         raw_events = data.get('events', [])
         if isinstance(data, list):
@@ -771,6 +798,9 @@ def push_session_events(session_id):
             'ingested_events': ingested,
             'skipped_duplicate_events': skipped
         }), 201
+    except HTTPException as he:
+        db.session.rollback()
+        return jsonify({'error': he.description}), he.code
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error pushing session events: {e}")
@@ -783,7 +813,11 @@ def create_intervention(session_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
+        user = User.query.get(session['user_id'])
         therapy_session = TherapySession.query.get_or_404(session_id)
+        if not user or not _can_access_session(user, therapy_session):
+            return jsonify({'error': 'Forbidden: Access denied'}), 403
+
         data = request.get_json(silent=True) or {}
 
         intervention = Intervention(
@@ -806,6 +840,9 @@ def create_intervention(session_id):
             'intervention_id': intervention.id,
             'status': 'OBSERVING'
         }), 201
+    except HTTPException as he:
+        db.session.rollback()
+        return jsonify({'error': he.description}), he.code
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error creating intervention: {e}")
@@ -818,7 +855,11 @@ def record_intervention_outcome(intervention_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
+        user = User.query.get(session['user_id'])
         intervention = Intervention.query.get_or_404(intervention_id)
+        if not user or not _can_access_session(user, intervention.session):
+            return jsonify({'error': 'Forbidden: Access denied'}), 403
+
         data = request.get_json(silent=True) or {}
 
         outcome = InterventionOutcome.query.filter_by(intervention_id=intervention_id).first()
@@ -867,16 +908,25 @@ def record_intervention_outcome(intervention_id):
             'classification': outcome.classification,
             'delta_performance': outcome.delta_performance
         }), 201
+    except HTTPException as he:
+        db.session.rollback()
+        return jsonify({'error': he.description}), he.code
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error recording intervention outcome: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/patient/<int:patient_id>/envelope', defaults={'exercise_type': 'gait_trainer'}, methods=['GET'])
 @app.route('/api/patient/<int:patient_id>/envelope/<exercise_type>', methods=['GET'])
-def get_patient_envelope(patient_id, exercise_type):
+def get_patient_envelope(patient_id, exercise_type='gait_trainer'):
     """Retrieve personal performance envelope for exercise personalization"""
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
+
+    user = User.query.get(session['user_id'])
+    patient = PatientProfile.query.get_or_404(patient_id)
+    if not user or not _can_access_patient(user, patient):
+        return jsonify({'error': 'Forbidden: Access denied'}), 403
 
     envelope = PatientPerformanceEnvelope.query.filter_by(
         patient_id=patient_id,
@@ -916,7 +966,11 @@ def get_session_replay(session_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
+    user = User.query.get(session['user_id'])
     therapy_session = TherapySession.query.get_or_404(session_id)
+    if not user or not _can_access_session(user, therapy_session):
+        return jsonify({'error': 'Forbidden: Access denied'}), 403
+
     events = SessionEvent.query.filter_by(session_id=session_id).order_by(SessionEvent.timestamp.asc()).all()
     adaptations = AdaptationRecord.query.filter_by(session_id=session_id).order_by(AdaptationRecord.timestamp.asc()).all()
     decisions = AgentDecision.query.filter_by(session_id=session_id).order_by(AgentDecision.timestamp.asc()).all()
@@ -998,11 +1052,10 @@ def session_measurement_summary(session_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    therapy_session = TherapySession.query.get_or_404(session_id)
     user = User.query.get(session['user_id'])
-
-    if session.get('user_type') == 'patient' and therapy_session.patient.user_id != user.id:
-        return jsonify({'error': 'Unauthorized'}), 401
+    therapy_session = TherapySession.query.get_or_404(session_id)
+    if not user or not _can_access_session(user, therapy_session):
+        return jsonify({'error': 'Forbidden: Access denied'}), 403
 
     from services.measurement_service import measurement_service
     from services.gemini_service import generate_validated_measurement_summary
@@ -1046,10 +1099,10 @@ def session_agent_summary(session_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    therapy_session = TherapySession.query.get_or_404(session_id)
     user = User.query.get(session['user_id'])
-    if session.get('user_type') == 'patient' and therapy_session.patient.user_id != user.id:
-        return jsonify({'error': 'Unauthorized'}), 401
+    therapy_session = TherapySession.query.get_or_404(session_id)
+    if not user or not _can_access_session(user, therapy_session):
+        return jsonify({'error': 'Forbidden: Access denied'}), 403
 
     metrics = therapy_session.get_metrics()
     return jsonify({
@@ -1067,8 +1120,12 @@ def generate_ai_report(patient_id):
         return jsonify({'error': 'Unauthorized: Clinician access required'}), 401
 
     try:
-        from services.gemini_service import generate_clinical_soap_note_few_shot
+        user = User.query.get(session['user_id'])
         patient = PatientProfile.query.get_or_404(patient_id)
+        if not user or not _can_access_patient(user, patient):
+            return jsonify({'error': 'Forbidden: Clinician not authorized for patient'}), 403
+
+        from services.gemini_service import generate_clinical_soap_note_few_shot
 
         # Gather baseline metrics
         baseline = {

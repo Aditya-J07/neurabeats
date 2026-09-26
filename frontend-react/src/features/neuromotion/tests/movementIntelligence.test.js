@@ -258,4 +258,71 @@ describe('Movement Intelligence & Rhythm Intelligence Test Suite (P1)', () => {
     expect(state).toHaveProperty('confidence');
     expect(typeof state.confidence).toBe('number');
   });
+
+  // ADVERSARIAL TEST 1: NaN and Infinity injection
+  it('ADVERSARIAL 1: gracefully handles NaN and Infinity landmark coordinates without producing NaN in state', () => {
+    const corruptedLms = createBaseLandmarks();
+    corruptedLms[23].x = NaN;
+    corruptedLms[24].y = Infinity;
+    corruptedLms[25].z = -Infinity;
+    corruptedLms[26].visibility = NaN;
+
+    let state;
+    for (let i = 0; i < 20; i++) {
+      state = mi.processFrame(corruptedLms, 30, i * 0.033);
+    }
+
+    expect(Number.isFinite(state.confidence)).toBe(true);
+    expect(Number.isFinite(state.movement.rom)).toBe(true);
+    expect(Number.isFinite(state.movement.velocity)).toBe(true);
+    expect(Number.isFinite(state.movement.quality)).toBe(true);
+    expect(Number.isFinite(state.rhythm.sync)).toBe(true);
+  });
+
+  // ADVERSARIAL TEST 2: Confidence boundary sweep
+  it('ADVERSARIAL 2: transitions states accurately across confidence boundaries [0.0, 0.44, 0.45, 0.49, 0.50, 1.0]', () => {
+    const boundaries = [0.0, 0.44, 0.45, 0.49, 0.50, 1.0];
+    for (const conf of boundaries) {
+      const lms = createBaseLandmarks();
+      // Set key joints visibility
+      [11, 12, 23, 24, 25, 26, 27, 28].forEach(idx => {
+        lms[idx].visibility = conf;
+      });
+
+      mi.reset();
+      let state;
+      for (let i = 0; i < 20; i++) {
+        state = mi.processFrame(lms, 30, i * 0.033);
+      }
+      expect(Number.isFinite(state.confidence)).toBe(true);
+      expect(state.confidence).toBeGreaterThanOrEqual(0.0);
+      expect(state.confidence).toBeLessThanOrEqual(1.0);
+      if (state.confidence < 0.40) {
+        expect(state.state).toBe('LOW_CONFIDENCE');
+      }
+    }
+  });
+
+  // ADVERSARIAL TEST 3: Null, undefined, and truncated landmark arrays
+  it('ADVERSARIAL 3: handles null, undefined, or truncated landmark arrays gracefully', () => {
+    expect(() => mi.processFrame(null, 0, 0.1)).not.toThrow();
+    expect(() => mi.processFrame(undefined, 0, 0.2)).not.toThrow();
+    expect(() => mi.processFrame([], 0, 0.3)).not.toThrow();
+    expect(() => mi.processFrame([{ x: 0.5, y: 0.5 }], 0, 0.4)).not.toThrow();
+    const state = mi.getState();
+    expect(state.confidence).toBeLessThanOrEqual(0.40);
+  });
+
+  // ADVERSARIAL TEST 4: Alternating high-frequency noise & velocity bounding
+  it('ADVERSARIAL 4: bounds velocity and prevents explosion under high-frequency alternating noise', () => {
+    let state;
+    for (let i = 0; i < 30; i++) {
+      const toggle = (i % 2 === 0) ? 1.0 : -1.0;
+      const lms = createBaseLandmarks(toggle * 5.0, toggle * 2.0);
+      state = mi.processFrame(lms, 50, i * 0.033);
+    }
+    // Max physical velocity is clamped in calculateVelocityAndAcceleration
+    expect(state.movement.velocity).toBeLessThanOrEqual(10.0);
+    expect(Number.isFinite(state.movement.velocity)).toBe(true);
+  });
 });

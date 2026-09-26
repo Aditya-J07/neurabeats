@@ -731,9 +731,45 @@
             }
 
             // 3. Schema & Target Validation
-            const target = proposal.target || 'TEMPO';
-            const action = proposal.action || 'MAINTAIN';
-            if (action === 'MAINTAIN' || target === 'NONE') {
+            const VALID_ACTIONS = new Set([
+                'INCREASE_TEMPO', 'DECREASE_TEMPO', 'MAINTAIN', 
+                'INCREASE_MOVEMENT_TARGET', 'DECREASE_MOVEMENT_TARGET', 
+                'REQUEST_MORE_OBSERVATION', 'OBSERVE', 'RECOVER'
+            ]);
+            const VALID_TARGETS = new Set(['TEMPO', 'MOVEMENT', 'REPETITIONS', 'ROM', 'NONE']);
+
+            const target = (proposal.target || 'TEMPO').toString().toUpperCase();
+            const action = (proposal.action || 'MAINTAIN').toString().toUpperCase();
+
+            if (!VALID_ACTIONS.has(action)) {
+                return {
+                    validatorResult: 'REJECTED',
+                    reason: `Unrecognized action: ${action}. Proposal rejected.`,
+                    executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+                };
+            }
+            if (!VALID_TARGETS.has(target)) {
+                return {
+                    validatorResult: 'REJECTED',
+                    reason: `Unrecognized target: ${target}. Proposal rejected.`,
+                    executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+                };
+            }
+
+            // Check if explicit requested BPM is valid
+            const explicitBpm = proposal.requestedBpm !== undefined ? proposal.requestedBpm : proposal.requested_bpm;
+            if (explicitBpm !== undefined) {
+                const parsedDirect = Number(explicitBpm);
+                if (!Number.isFinite(parsedDirect) || isNaN(parsedDirect)) {
+                    return {
+                        validatorResult: 'REJECTED',
+                        reason: 'Requested BPM must be a finite numerical value.',
+                        executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+                    };
+                }
+            }
+
+            if (action === 'MAINTAIN' || target === 'NONE' || action === 'OBSERVE' || action === 'REQUEST_MORE_OBSERVATION') {
                 return {
                     validatorResult: 'APPROVED',
                     reason: proposal.reason || 'Maintained steady challenge.',
@@ -749,16 +785,32 @@
 
             // 4. Parameter-Specific Clamping & Execution (TEMPO)
             if (target === 'TEMPO') {
-                const previousBpm = this.targetBpm;
+                const previousBpm = Number.isFinite(this.targetBpm) ? this.targetBpm : 60.0;
                 let rawRequestedDelta = 0;
                 let direction = 'MAINTAIN';
 
+                // Parse and sanitize magnitude
+                let magnitude = 1.0;
+                if (typeof proposal.magnitude === 'number' && Number.isFinite(proposal.magnitude) && !isNaN(proposal.magnitude)) {
+                    magnitude = Math.abs(proposal.magnitude);
+                } else if (typeof proposal.magnitude === 'string') {
+                    const parsed = parseFloat(proposal.magnitude);
+                    magnitude = (Number.isFinite(parsed) && !isNaN(parsed)) ? Math.abs(parsed) : 1.0;
+                }
+
                 if (action === 'INCREASE_TEMPO') {
                     direction = 'PROGRESS';
-                    rawRequestedDelta = proposal.magnitude > 1 ? proposal.magnitude : Math.max(1, Math.round(proposal.magnitude * 50));
+                    rawRequestedDelta = magnitude > 1.0 ? magnitude : Math.max(1.0, Math.round(magnitude * 50));
                 } else if (action === 'DECREASE_TEMPO') {
                     direction = 'REGRESS';
-                    rawRequestedDelta = proposal.magnitude > 1 ? -proposal.magnitude : -Math.max(1, Math.round(proposal.magnitude * 50));
+                    rawRequestedDelta = magnitude > 1.0 ? -magnitude : -Math.max(1.0, Math.round(magnitude * 50));
+                }
+
+                // If explicit BPM was given, compute delta relative to previousBpm
+                if (explicitBpm !== undefined) {
+                    const reqVal = Number(explicitBpm);
+                    rawRequestedDelta = reqVal - previousBpm;
+                    direction = rawRequestedDelta >= 0 ? 'PROGRESS' : 'REGRESS';
                 }
 
                 const requestedBpm = previousBpm + rawRequestedDelta;
@@ -766,10 +818,10 @@
                 let clampReason = null;
 
                 // Max step bound: max 5 BPM per intervention
-                const maxStep = 5;
+                const maxStep = 5.0;
                 if (Math.abs(clampedDelta) > maxStep) {
                     clampedDelta = Math.sign(clampedDelta) * maxStep;
-                    clampReason = `Requested step (${rawRequestedDelta > 0 ? '+' : ''}${rawRequestedDelta} BPM) clamped to maximum allowed step (±${maxStep} BPM).`;
+                    clampReason = `Requested step (${rawRequestedDelta > 0 ? '+' : ''}${rawRequestedDelta.toFixed(1)} BPM) clamped to maximum allowed step (±${maxStep} BPM).`;
                 }
 
                 let candidateBpm = previousBpm + clampedDelta;

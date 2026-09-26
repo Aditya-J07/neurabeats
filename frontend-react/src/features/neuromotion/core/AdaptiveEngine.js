@@ -604,4 +604,219 @@ export class AdaptiveEngine {
   getBaseLine() {
     return this.sessionBaseline;
   }
+
+  /**
+   * Authoritative P2 Execution Gateway for P5 Agent Proposals
+   * 
+   * P5 suggests -> P2 validates -> APPROVE / CLAMP / REJECT / FREEZE -> Executes if valid
+   */
+  validateAndExecuteProposal(proposal, currentConfidence = 1.0, personalEnvelope = null, nowSec = null) {
+    const now = nowSec !== null ? nowSec : (performance.now() / 1000.0);
+    
+    // 1. Gating: Low Tracking Confidence -> FREEZE
+    if (currentConfidence < this.config.minConfidenceThreshold) {
+      return {
+        validatorResult: 'FROZEN',
+        reason: `Tracking confidence (${currentConfidence.toFixed(2)}) is below safety threshold (${this.config.minConfidenceThreshold}). Adaptation frozen.`,
+        executedAction: {
+          direction: 'FREEZE',
+          parameter: 'NONE',
+          previousBpm: this.targetBpm,
+          executedBpm: this.targetBpm,
+          magnitude: 0
+        }
+      };
+    }
+
+    // 2. Cooldown Enforcement
+    const timeSinceLastAdapt = now - this.lastAdaptationTimestamp;
+    if (timeSinceLastAdapt < this.config.cooldownSeconds && proposal && proposal.action !== 'MAINTAIN') {
+      const cooldownRemain = Math.ceil(this.config.cooldownSeconds - timeSinceLastAdapt);
+      return {
+        validatorResult: 'REJECTED',
+        reason: `Adaptation cooldown active (${cooldownRemain}s remaining). Proposal rejected.`,
+        executedAction: {
+          direction: 'MAINTAIN',
+          parameter: 'NONE',
+          previousBpm: this.targetBpm,
+          executedBpm: this.targetBpm,
+          magnitude: 0
+        }
+      };
+    }
+
+    if (!proposal || typeof proposal !== 'object') {
+      return {
+        validatorResult: 'REJECTED',
+        reason: 'Invalid proposal object.',
+        executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+      };
+    }
+
+    // 3. Schema & Target Validation
+    const VALID_ACTIONS = new Set([
+      'INCREASE_TEMPO', 'DECREASE_TEMPO', 'MAINTAIN', 
+      'INCREASE_MOVEMENT_TARGET', 'DECREASE_MOVEMENT_TARGET', 
+      'REQUEST_MORE_OBSERVATION', 'OBSERVE', 'RECOVER'
+    ]);
+    const VALID_TARGETS = new Set(['TEMPO', 'MOVEMENT', 'REPETITIONS', 'ROM', 'NONE']);
+
+    const target = (proposal.target || 'TEMPO').toString().toUpperCase();
+    const action = (proposal.action || 'MAINTAIN').toString().toUpperCase();
+
+    if (!VALID_ACTIONS.has(action)) {
+      return {
+        validatorResult: 'REJECTED',
+        reason: `Unrecognized action: ${action}. Proposal rejected.`,
+        executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+      };
+    }
+    if (!VALID_TARGETS.has(target)) {
+      return {
+        validatorResult: 'REJECTED',
+        reason: `Unrecognized target: ${target}. Proposal rejected.`,
+        executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+      };
+    }
+
+    // Check if explicit requested BPM is valid
+    const explicitBpm = proposal.requestedBpm !== undefined ? proposal.requestedBpm : proposal.requested_bpm;
+    if (explicitBpm !== undefined) {
+      const parsedDirect = Number(explicitBpm);
+      if (!Number.isFinite(parsedDirect) || isNaN(parsedDirect)) {
+        return {
+          validatorResult: 'REJECTED',
+          reason: 'Requested BPM must be a finite numerical value.',
+          executedAction: { direction: 'MAINTAIN', parameter: 'NONE', previousBpm: this.targetBpm, executedBpm: this.targetBpm, magnitude: 0 }
+        };
+      }
+    }
+
+    if (action === 'MAINTAIN' || target === 'NONE' || action === 'OBSERVE' || action === 'REQUEST_MORE_OBSERVATION') {
+      return {
+        validatorResult: 'APPROVED',
+        reason: proposal.reason || 'Maintained steady challenge.',
+        executedAction: {
+          direction: 'MAINTAIN',
+          parameter: 'NONE',
+          previousBpm: this.targetBpm,
+          executedBpm: this.targetBpm,
+          magnitude: 0
+        }
+      };
+    }
+
+    // 4. Parameter-Specific Clamping & Execution (TEMPO)
+    if (target === 'TEMPO') {
+      const previousBpm = Number.isFinite(this.targetBpm) ? this.targetBpm : 60.0;
+      let rawRequestedDelta = 0;
+      let direction = 'MAINTAIN';
+
+      // Parse and sanitize magnitude
+      let magnitude = 1.0;
+      if (typeof proposal.magnitude === 'number' && Number.isFinite(proposal.magnitude) && !isNaN(proposal.magnitude)) {
+        magnitude = Math.abs(proposal.magnitude);
+      } else if (typeof proposal.magnitude === 'string') {
+        const parsed = parseFloat(proposal.magnitude);
+        magnitude = (Number.isFinite(parsed) && !isNaN(parsed)) ? Math.abs(parsed) : 1.0;
+      }
+
+      if (action === 'INCREASE_TEMPO') {
+        direction = 'PROGRESS';
+        rawRequestedDelta = magnitude > 1.0 ? magnitude : Math.max(1.0, Math.round(magnitude * 50));
+      } else if (action === 'DECREASE_TEMPO') {
+        direction = 'REGRESS';
+        rawRequestedDelta = magnitude > 1.0 ? -magnitude : -Math.max(1.0, Math.round(magnitude * 50));
+      }
+
+      // If explicit BPM was given, compute delta relative to previousBpm
+      if (explicitBpm !== undefined) {
+        const reqVal = Number(explicitBpm);
+        rawRequestedDelta = reqVal - previousBpm;
+        direction = rawRequestedDelta >= 0 ? 'PROGRESS' : 'REGRESS';
+      }
+
+      const requestedBpm = previousBpm + rawRequestedDelta;
+      let clampedDelta = rawRequestedDelta;
+      let clampReason = null;
+
+      // Max step bound: max 5 BPM per intervention
+      const maxStep = 5.0;
+      if (Math.abs(clampedDelta) > maxStep) {
+        clampedDelta = Math.sign(clampedDelta) * maxStep;
+        clampReason = `Requested step (${rawRequestedDelta > 0 ? '+' : ''}${rawRequestedDelta.toFixed(1)} BPM) clamped to maximum allowed step (±${maxStep} BPM).`;
+      }
+
+      let candidateBpm = previousBpm + clampedDelta;
+
+      // Safety boundaries [minBpm, maxBpm]
+      if (candidateBpm < this.config.minBpm) {
+        candidateBpm = this.config.minBpm;
+        clampReason = (clampReason ? clampReason + ' ' : '') + `Clamped to minimum safety bound (${this.config.minBpm} BPM).`;
+      } else if (candidateBpm > this.config.maxBpm) {
+        candidateBpm = this.config.maxBpm;
+        clampReason = (clampReason ? clampReason + ' ' : '') + `Clamped to maximum safety bound (${this.config.maxBpm} BPM).`;
+      }
+
+      // Personal envelope bounds check
+      if (personalEnvelope && direction === 'PROGRESS') {
+        const envMax = personalEnvelope.stable_bpm_max || personalEnvelope.stableBpmMax;
+        if (envMax && candidateBpm > envMax + 2) {
+          candidateBpm = Math.min(candidateBpm, envMax + 2);
+          clampReason = (clampReason ? clampReason + ' ' : '') + `Restricted by patient stable envelope ceiling (${envMax} BPM).`;
+        }
+      }
+
+      const executedBpm = candidateBpm;
+      const validatorResult = (executedBpm === requestedBpm) ? 'APPROVED' : 'CLAMPED';
+
+      // Execute modification
+      this.targetBpm = executedBpm;
+      this.lastAdaptationTimestamp = now;
+      this.tempoDifficulty = Math.max(this.config.minDifficulty, Math.min(this.config.maxDifficulty, (executedBpm - this.config.minBpm) / (this.config.maxBpm - this.config.minBpm)));
+      this.difficulty = this.recalculateCompositeDifficulty();
+
+      const executedAction = {
+        direction: direction,
+        parameter: 'TEMPO',
+        previousBpm: previousBpm,
+        requestedBpm: requestedBpm,
+        executedBpm: executedBpm,
+        magnitude: Math.abs(executedBpm - previousBpm),
+        reason: proposal.reason || 'P5 proposed adaptation executed.',
+        clampReason: clampReason,
+        confidence: proposal.confidence || currentConfidence
+      };
+
+      this.lastDecision = {
+        direction: direction,
+        parameter: 'TEMPO',
+        magnitude: Math.abs(executedBpm - previousBpm) / 50.0,
+        adjustedBpm: executedBpm,
+        previousBpm: previousBpm,
+        reason: executedAction.reason,
+        confidence: executedAction.confidence
+      };
+
+      this.recordDecision(now, this.lastDecision, this.latestState ? this.latestState.performance.overallScore : 0.8);
+
+      return {
+        validatorResult: validatorResult,
+        reason: clampReason || 'Proposal approved and executed.',
+        executedAction: executedAction
+      };
+    }
+
+    return {
+      validatorResult: 'APPROVED',
+      reason: 'Non-tempo adaptation approved.',
+      executedAction: {
+        direction: 'MAINTAIN',
+        parameter: target,
+        previousBpm: this.targetBpm,
+        executedBpm: this.targetBpm,
+        magnitude: 0
+      }
+    };
+  }
 }
