@@ -209,15 +209,15 @@ NeuroBeat is structured around **three specialized, cooperatively orchestrated A
 
 ## 📸 Screenshots & Visual Interface
 
-| Patient Dashboard | Speech Rhythm Studio |
+| Landing & Authentication | Clinician Dashboard |
 | :---: | :---: |
-| ![Patient Dashboard](https://github.com/user-attachments/assets/934e06fa-71a7-47eb-83b4-ad16dc138793) | ![Speech Studio](https://github.com/user-attachments/assets/98e18871-d107-48ea-8f25-99b932bf1c17) |
-| *Session history, cadence targets, and mode selector* | *Minimal capsule voice visualizer & syllable pacing* |
+| ![Sign In & Registration](docs/images/login_register.jpg) | ![Clinician Dashboard](docs/images/clinician_dashboard.jpg) |
+| *Patient & Clinician onboarding and secure portal access* | *Comprehensive patient management, progress tracking & baseline metrics* |
 
-| Clinician Analytics | AI Session Report & SOAP Note |
+| Gait Trainer (Motor Rehabilitation) | Speech Rhythm Studio (Vocal Entrainment) |
 | :---: | :---: |
-| ![Clinician View](https://github.com/user-attachments/assets/2d203f62-53a2-40bf-a556-a811d830233a) | ![AI Report](https://github.com/user-attachments/assets/ed3814ea-e9c2-4063-b785-5d7752383161) |
-| *Patient cohort, longitudinal cadence charts, adherence* | *Gemini-generated clinical assessment & SOAP breakdown* |
+| ![Gait Trainer](docs/images/gait_trainer.jpg) | ![Speech Rhythm](docs/images/speech_rhythm.jpg) |
+| *Dual-layer ML leg tracking, step cadence & real-time sync* | *Syllable timing target pacing, microphone energy & auditory feedback* |
 
 ---
 
@@ -231,8 +231,8 @@ NeuroBeat is structured around **three specialized, cooperatively orchestrated A
 ### 1. Clone Repository & Setup Environment
 ```bash
 # Clone the repository
-git clone https://github.com/dudyalagurusreekar/NEUROBEAT.git
-cd NEUROBEAT
+git clone https://github.com/Aditya-J07/Nuro-Beats-BFB.git
+cd Nuro-Beats-BFB
 
 # Create and activate Python virtual environment
 python -m venv .venv
