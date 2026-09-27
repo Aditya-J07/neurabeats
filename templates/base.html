@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NeuroBeat - AI-Powered Neurorehabilitation{% endblock %}</title>
+    
+    <!-- Theme Flash Prevention -->
+    <script>
+        (function() {
+            try {
+                var theme = localStorage.getItem('neurobeat_theme') || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            } catch(e) {}
+        })();
+    </script>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Tone.js for audio generation -->
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/custom.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg border-bottom">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i data-feather="activity" class="me-2 brand-icon"></i>
+                <span class="brand-text">Neuro<span class="brand-highlight">Beat</span></span>
+            </a>
+            
+            <div class="d-flex align-items-center ms-auto">
+                <!-- Theme Toggle Button -->
+                <button type="button" class="theme-toggle-btn me-3" id="themeToggleBtn" aria-label="Toggle Light/Dark Theme" title="Toggle theme">
+                    <span id="themeToggleIcon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></span>
+                </button>
+
+                {% if 'user_id' in session %}
+                    <div class="navbar-nav d-flex flex-row align-items-center">
+                        <span class="navbar-text me-3">
+                            Welcome, {{ session.get('user_type', '').title() }}
+                        </span>
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i data-feather="log-out" class="me-1"></i>
+                            Logout
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="navbar-nav d-flex flex-row align-items-center gap-2">
+                        <a class="nav-link px-2" href="{{ url_for('index') }}">
+                            <i data-feather="log-in" class="me-1"></i>
+                            Sign In
+                        </a>
+                        <a class="btn btn-sm btn-outline-primary ms-1" href="{{ url_for('register') }}">
+                            <i data-feather="user-plus" class="me-1"></i>
+                            Register
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="container mt-3">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="container my-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-top text-center py-4 mt-5">
+        <div class="container">
+            <p class="mb-0 text-muted">
+                <i data-feather="heart" class="me-1"></i>
+                NeuroBeat - Empowering Recovery Through AI-Powered Music Therapy
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom Dropdown Enhancement -->
+    <script src="{{ url_for('static', filename='js/dropdown.js') }}?v=2.0"></script>
+    
+    <!-- Initialize Feather Icons -->
+    <script>
+        feather.replace();
+    </script>
+
+    <!-- Theme Toggle Controller -->
+    <script>
+        (function() {
+            var MOON_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+            var SUN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-sun"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
+
+            function updateThemeToggleUI(theme) {
+                var icon = document.getElementById('themeToggleIcon');
+                var btn = document.getElementById('themeToggleBtn');
+                if (!btn) return;
+                if (theme === 'dark') {
+                    if (icon) icon.innerHTML = SUN_ICON;
+                    btn.setAttribute('title', 'Switch to Light Mode');
+                    btn.setAttribute('aria-label', 'Switch to Light Mode');
+                } else {
+                    if (icon) icon.innerHTML = MOON_ICON;
+                    btn.setAttribute('title', 'Switch to Dark Mode');
+                    btn.setAttribute('aria-label', 'Switch to Dark Mode');
+                }
+            }
+
+            var currentTheme = 'light';
+            try {
+                currentTheme = localStorage.getItem('neurobeat_theme') || 'light';
+            } catch(e) {}
+            updateThemeToggleUI(currentTheme);
+
+            var toggleBtn = document.getElementById('themeToggleBtn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    var current = document.documentElement.getAttribute('data-theme') || 'light';
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.documentElement.setAttribute('data-bs-theme', next);
+                    try {
+                        localStorage.setItem('neurobeat_theme', next);
+                    } catch(e) {}
+                    updateThemeToggleUI(next);
+                });
+            }
+        })();
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

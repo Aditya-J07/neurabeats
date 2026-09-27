@@ -1,0 +1,685 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Dashboard - NeuroBeat{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Welcome Section -->
+    <div class="col-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2>Welcome back, {{ user.first_name }}!</h2>
+                <p class="text-muted">{{ patient_profile.condition.replace('_', ' ').title() }} Recovery Program</p>
+            </div>
+            <div>
+                {% if patient_profile.condition == 'stroke' %}
+                <button type="button" class="btn btn-primary" onclick="startStrokeSession('gait_trainer')">
+                    <i data-feather="play" class="me-2"></i>
+                    Start Gait Trainer
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-primary" onclick="startSession('gait_trainer')">
+                    <i data-feather="play" class="me-2"></i>
+                    Start Gait Trainer
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="col-12 mb-4">
+        <div class="row g-4">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i data-feather="activity" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <h4>{{ total_sessions }}</h4>
+                        <p class="text-muted mb-0">Total Sessions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i data-feather="target" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <h4>{{ avg_accuracy }}%</h4>
+                        <p class="text-muted mb-0">Avg Accuracy</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i data-feather="trending-up" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <h4>{{ (patient_profile.baseline_cadence|round|int) if patient_profile.baseline_cadence else (baseline_bpm or 60) }} BPM</h4>
+                        <p class="text-muted mb-0">Baseline BPM</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i data-feather="flag" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <h4>{{ (patient_profile.target_cadence|round|int) if patient_profile.target_cadence else (target_bpm or 66) }} BPM</h4>
+                        <p class="text-muted mb-0">Target BPM</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <!-- Therapy Modules -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="play-circle" class="me-2"></i>
+                    {% if patient_profile.condition == 'stroke' %}Stroke Rehabilitation Modules{% else %}Therapy Modules{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if patient_profile.condition == 'stroke' %}
+                <!-- Stroke-specific therapy modules -->
+                <div class="row g-3">
+                    <!-- Gait Training (RAS) -->
+                    <div class="col-md-6">
+                        <div class="card border-primary h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="activity" class="mb-3" style="width: 48px; height: 48px; color: #01aac5;"></i>
+                                <h5>Gait Training (RAS)</h5>
+                                <p class="text-muted">Rhythmic Auditory Stimulation for walking recovery</p>
+                                <small class="text-info">Recommended BPM: 40-60</small>
+                                <br>
+                                <button type="button" class="btn btn-primary mt-2" onclick="startStrokeSession('gait_trainer')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upper Limb Motor -->
+                    <div class="col-md-6">
+                        <div class="card border-warning h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="move" class="mb-3" style="width: 48px; height: 48px; color: #ffc107;"></i>
+                                <h5>Upper Limb Training</h5>
+                                <p class="text-muted">Percussion exercises for arm coordination</p>
+                                <small class="text-warning">Focus: {{ patient_profile.stroke_affected_side or 'Both' }} side</small>
+                                <br>
+                                <button type="button" class="btn btn-warning mt-2" onclick="startStrokeSession('upper_limb_motor')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Melodic Intonation Therapy -->
+                    <div class="col-md-6">
+                        <div class="card border-success h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="music" class="mb-3" style="width: 48px; height: 48px; color: #198754;"></i>
+                                <h5>Melodic Intonation</h5>
+                                <p class="text-muted">Singing therapy for speech recovery</p>
+                                <small class="text-success">For: {{ patient_profile.aphasia_type or 'Speech' }} improvement</small>
+                                <br>
+                                <button type="button" class="btn btn-success mt-2" onclick="startStrokeSession('melodic_intonation')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Speech Therapy (Speech Rhythm) -->
+                    <div class="col-md-6">
+                        <div class="card border-info h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="mic" class="mb-3" style="width: 48px; height: 48px; color: #0dcaf0;"></i>
+                                <h5>Speech Therapy</h5>
+                                <p class="text-muted">Syllable timing and articulation practice</p>
+                                <small class="text-info">Recommended BPM: 50-90</small>
+                                <br>
+                                <button type="button" class="btn btn-info mt-2" onclick="startStrokeSession('speech_rhythm')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cognitive Training -->
+                    <div class="col-lg-12">
+                        <div class="card border-secondary h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="cpu" class="mb-3" style="width: 48px; height: 48px; color: #6c757d;"></i>
+                                <h5>Cognitive Rhythm Training</h5>
+                                <p class="text-muted">Attention, memory, and sequencing exercises with music</p>
+                                <small class="text-secondary">Status: {{ patient_profile.cognitive_status or 'Normal' }}</small>
+                                <br>
+                                <button type="button" class="btn btn-secondary mt-2" onclick="startStrokeSession('cognitive_rhythm')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Standard therapy modules for Parkinson's -->
+                <div class="row g-3">
+                    <!-- Gait Trainer -->
+                    <div class="col-md-6">
+                        <div class="card border-primary h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="activity" class="mb-3" style="width: 48px; height: 48px; color: #01aac5;"></i>
+                                <h5>Gait Trainer</h5>
+                                <p class="text-muted">Improve walking rhythm and balance with musical cues</p>
+                                <button type="button" class="btn btn-primary" onclick="startSession('gait_trainer')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Speech Therapy (Speech Rhythm) -->
+                    <div class="col-md-6">
+                        <div class="card border-success h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="mic" class="mb-3" style="width: 48px; height: 48px; color: #198754;"></i>
+                                <h5>Speech Therapy</h5>
+                                <p class="text-muted">Practice speech rhythm, timing, and articulation</p>
+                                <button type="button" class="btn btn-success" onclick="startSession('speech_rhythm')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Finger Tapping -->
+                    <div class="col-md-6">
+                        <div class="card border-warning h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="move" class="mb-3" style="width: 48px; height: 48px; color: #ffc107;"></i>
+                                <h5>Finger Tapping</h5>
+                                <p class="text-muted">Enhance fine motor control and coordination</p>
+                                <button type="button" class="btn btn-warning" onclick="startSession('finger_tapping')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Balance Training -->
+                    <div class="col-md-6">
+                        <div class="card border-info h-100">
+                            <div class="card-body text-center">
+                                <i data-feather="target" class="mb-3" style="width: 48px; height: 48px; color: #0dcaf0;"></i>
+                                <h5>Balance Training</h5>
+                                <p class="text-muted">Improve stability with rhythmic exercises</p>
+                                <button type="button" class="btn btn-info" onclick="startSession('balance_training')">
+                                    Start Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recent Sessions -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="clock" class="me-2"></i>
+                    Recent Sessions
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_sessions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Duration</th>
+                                    <th>Accuracy</th>
+                                    <th>BPM Range</th>
+                                    <th>Report</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in recent_sessions %}
+                                <tr>
+                                    <td>{{ session.start_time.strftime('%m/%d/%Y %I:%M %p') }}</td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ session.session_type.replace('_', ' ').title() }}</span>
+                                    </td>
+                                    <td>{{ session.duration_seconds|format_duration }}</td>
+                                    <td>
+                                        {% if session.accuracy_score is not none %}
+                                            <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                                {{ session.accuracy_score|round|int }}%
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ session.initial_bpm|round|int }} - {{ session.final_bpm|round|int if session.final_bpm else session.initial_bpm|round|int }}</td>
+                                    <td>
+                                        {% if session.completed %}
+                                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.78rem;" onclick="viewSessionReport({{ session.id }})">
+                                                <i data-feather="file-text" style="width: 12px; height: 12px;"></i> View AI Report
+                                            </button>
+                                        {% else %}
+                                            <span class="text-muted small">In Progress</span>
+                                        {% endif %}
+
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i data-feather="calendar" class="mb-3" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+                        <p class="text-muted">No sessions completed yet. Start your first therapy session!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="zap" class="me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+
+                    <a href="{{ url_for('progress_view', patient_id=patient_profile.id) }}" class="btn btn-outline-info">
+                        <i data-feather="bar-chart-2" class="me-2"></i>
+                        View Progress
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Summary -->
+        {% if patient_profile.baseline_cadence and patient_profile.target_cadence %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="trending-up" class="me-2"></i>
+                    Progress Summary
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Rhythm Synchronization Progress</label>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: {{ (avg_accuracy or 0)|round|int }}%">
+                            {{ (avg_accuracy or 0)|round|int }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">Based on overall session accuracy</small>
+                </div>
+
+                <div class="row text-center">
+                    <div class="col-6">
+                        <small class="text-muted">Current</small>
+                        <div class="h5">{{ patient_profile.baseline_cadence|round|int }}</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Target</small>
+                        <div class="h5">{{ patient_profile.target_cadence|round|int }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+async function startSession(sessionType) {
+    try {
+        // Use baseline BPM if available, otherwise default values
+        let initialBpm = 60;
+        let targetBpm = 70;
+        
+        {% if patient_profile.baseline_cadence %}
+            initialBpm = {{ patient_profile.baseline_cadence|round|int }};
+            targetBpm = {{ patient_profile.target_cadence|round|int if patient_profile.target_cadence else (patient_profile.baseline_cadence * 1.1)|round|int }};
+        {% endif %}
+
+        const response = await fetch('/session/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_type: sessionType,
+                initial_bpm: initialBpm,
+                target_bpm: targetBpm
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            window.location.href = `/session/${data.session_id}`;
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            alert(errData.error || errData.details || 'Failed to start session. Please try again.');
+        }
+    } catch (error) {
+        console.error('Error starting session:', error);
+        alert('Failed to start session: ' + (error.message || 'Please try again.'));
+    }
+}
+
+async function startStrokeSession(sessionType) {
+    try {
+        // Use baseline BPM if available, otherwise use optimal defaults
+        let defaultBpm = 60;
+        let targetBpm = 65;
+        let affectedLimb = null;
+        let cognitiveLevel = 1;
+
+        // Check if we have baseline assessments to use
+        {% if patient_profile.baseline_cadence %}
+            if (sessionType === 'gait_trainer') {
+                defaultBpm = {{ patient_profile.baseline_cadence|round|int }};
+                targetBpm = {{ patient_profile.target_cadence|round|int if patient_profile.target_cadence else (patient_profile.baseline_cadence * 1.05)|round|int }};
+            }
+        {% endif %}
+        
+        {% if patient_profile.baseline_tapping_speed %}
+            if (sessionType === 'upper_limb_motor') {
+                defaultBpm = {{ (patient_profile.baseline_tapping_speed / 4)|round|int }}; // Convert taps/min to BPM
+                targetBpm = defaultBpm + 5;
+            }
+        {% endif %}
+        
+        {% if patient_profile.baseline_speech_rate %}
+            if (sessionType === 'melodic_intonation' || sessionType === 'speech_rhythm') {
+                defaultBpm = {{ (patient_profile.baseline_speech_rate / 3)|round|int }}; // Convert syllables/min to BPM
+                targetBpm = defaultBpm + 5;
+            }
+        {% endif %}
+
+        // Set optimal BPM based on session type if no baseline available
+        if (!defaultBpm || defaultBpm === 60) {
+            if (sessionType === 'gait_trainer') {
+                defaultBpm = 50;
+            } else if (sessionType === 'upper_limb_motor') {
+                defaultBpm = 55;
+            } else if (sessionType === 'melodic_intonation' || sessionType === 'speech_rhythm') {
+                defaultBpm = 70;
+            } else if (sessionType === 'cognitive_rhythm') {
+                defaultBpm = 65;
+            }
+            targetBpm = defaultBpm + 5;
+        }
+
+        // Get session-specific parameters
+        if (sessionType === 'upper_limb_motor') {
+            affectedLimb = '{{ patient_profile.stroke_affected_side or "affected" }}';
+        } else if (sessionType === 'cognitive_rhythm') {
+            cognitiveLevel = 2; // Default cognitive level
+        }
+
+        const sessionData = {
+            session_type: sessionType,
+            initial_bpm: defaultBpm,
+            target_bpm: targetBpm,
+            affected_limb: affectedLimb,
+            cognitive_load_level: cognitiveLevel
+        };
+
+        const response = await fetch('/session/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sessionData)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+
+            if (data.beat_url) {
+                console.log('Custom therapeutic beat generated for session');
+            }
+
+            window.location.href = `/session/${data.session_id}`;
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            alert(errData.error || errData.details || 'Failed to start session. Please try again.');
+        }
+    } catch (error) {
+        console.error('Error starting stroke session:', error);
+        alert('Failed to start session: ' + (error.message || 'Please try again.'));
+    }
+}
+
+function viewSessionReport(sessionId) {
+    const modalEl = document.getElementById('patientReportModal');
+    const bodyEl = document.getElementById('patientReportModalBody');
+    if (!modalEl || !bodyEl) return;
+
+    bodyEl.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Generating / loading clinical AI report...</div>';
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    function ensureArray(val) {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch(e) {}
+            }
+            return trimmed ? [trimmed] : [];
+        }
+        return [String(val)];
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    fetch('/api/session/' + sessionId + '/report')
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status + ': Failed to retrieve report');
+            return res.json();
+        })
+        .then(data => {
+            if (data.error) {
+                bodyEl.innerHTML = '<div class="alert alert-warning mb-0">' + esc(data.error) + '</div>';
+                return;
+            }
+
+            const didItems = ensureArray(data.what_you_did);
+            const didList = didItems.length
+                ? didItems.map(i => '<li class="d-flex align-items-start gap-2 mb-1"><span class="text-success mt-1" style="font-size:0.65rem;">●</span><span>' + esc(i) + '</span></li>').join('')
+                : '<li class="text-muted small">Completed scheduled therapy interval.</li>';
+
+            const improveItems = ensureArray(data.what_to_improve);
+            const improveList = improveItems.length
+                ? improveItems.map(i => '<li class="d-flex align-items-start gap-2 mb-1"><span class="text-warning mt-1" style="font-size:0.65rem;">●</span><span>' + esc(i) + '</span></li>').join('')
+                : '<li class="text-muted small">Maintain steady rhythm synchronization.</li>';
+
+            const recItems = ensureArray(data.recommendations);
+            const recList = recItems.length
+                ? recItems.map(i => '<li class="d-flex align-items-start gap-2 mb-1"><span class="text-info mt-1" style="font-size:0.65rem;">●</span><span>' + esc(i) + '</span></li>').join('')
+                : '';
+
+            const soap = data.soap || {};
+            const soapSubjective = soap.subjective || data.soap_subjective || 'Patient completed auditory-motor session without distress.';
+            const soapObjective = soap.objective || data.soap_objective || `Completed ${data.duration_seconds || 0}s at ${Math.round(data.final_bpm || data.avg_bpm || 60)} BPM with ${data.accuracy_score !== null ? Math.round(data.accuracy_score) + '%' : 'functional adherence'}.`;
+            const soapAssessment = soap.assessment || data.soap_assessment || 'Motor adaptation proceeding as prescribed with auditory entrainment.';
+            const soapPlan = soap.plan || data.soap_plan || 'Continue prescribed rhythmic auditory stimulation pacing protocol.';
+
+            const durationFormatted = data.duration_seconds ? `${Math.floor(data.duration_seconds / 60)}m ${data.duration_seconds % 60}s` : '0m 0s';
+            const cadenceFormatted = Math.round(data.final_bpm || data.avg_bpm || data.initial_bpm || 60);
+
+            bodyEl.innerHTML = `
+                <!-- Metrics Bar -->
+                <div class="row g-2 text-center mb-3">
+                    <div class="col-4">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                            <div class="small text-muted">Accuracy</div>
+                            <div class="fw-bold" style="color: #01aac5; font-size: 1.2rem;">${data.accuracy_score !== null && data.accuracy_score !== undefined ? Math.round(data.accuracy_score) + '%' : 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                            <div class="small text-muted">Duration</div>
+                            <div class="fw-bold text-theme-adaptive" style="font-size: 1.2rem;">${durationFormatted}</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                            <div class="small text-muted">Cadence</div>
+                            <div class="fw-bold text-theme-adaptive" style="font-size: 1.2rem;">${cadenceFormatted} BPM</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executive Summary -->
+                <div class="card border-0 mb-3" style="background: rgba(1, 170, 197, 0.06); border-left: 4px solid #01aac5 !important; border-radius: 0.75rem;">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="fw-bold small" style="color: #01aac5;">Executive AI Summary</div>
+                            <span class="badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; font-size: 0.7rem;">${esc(data.ai_model || 'Gemini 2.5 Flash')}</span>
+                        </div>
+                        <p class="small text-theme-adaptive mb-0" style="line-height: 1.5;">${esc(data.summary || 'Session completed successfully.')}</p>
+                    </div>
+                </div>
+
+                <!-- What You Did -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <i data-feather="check-circle" style="width: 14px; height: 14px; color: #10b981;"></i>
+                        <span class="fw-semibold text-theme-adaptive small">What You Did</span>
+                    </div>
+                    <ul class="list-unstyled mb-0 ps-2 small text-muted" style="line-height: 1.5;">
+                        ${didList}
+                    </ul>
+                </div>
+
+                <!-- Key Improvements -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <i data-feather="trending-up" style="width: 14px; height: 14px; color: #f59e0b;"></i>
+                        <span class="fw-semibold text-theme-adaptive small">Key Areas To Improve</span>
+                    </div>
+                    <ul class="list-unstyled mb-0 ps-2 small text-muted" style="line-height: 1.5;">
+                        ${improveList}
+                    </ul>
+                </div>
+
+                ${recList ? `
+                <!-- Clinical Recommendations -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <i data-feather="compass" style="width: 14px; height: 14px; color: #01aac5;"></i>
+                        <span class="fw-semibold text-theme-adaptive small">Recommendations</span>
+                    </div>
+                    <ul class="list-unstyled mb-0 ps-2 small text-muted" style="line-height: 1.5;">
+                        ${recList}
+                    </ul>
+                </div>` : ''}
+
+                <!-- Medical SOAP Documentation Section -->
+                <div class="card border-0 shadow-sm mt-3" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important; border-radius: 0.75rem;">
+                    <div class="card-header bg-transparent border-bottom py-2 d-flex justify-content-between align-items-center">
+                        <span class="fw-bold small" style="color: #6366f1; letter-spacing: 0.5px;">
+                            <i data-feather="clipboard" class="me-1" style="width: 13px; height: 13px;"></i>
+                            CLINICAL SOAP PROGRESS NOTE
+                        </span>
+                        <span class="badge" style="background: rgba(99, 102, 241, 0.12); color: #6366f1; font-size: 0.68rem;">Verified Medical Format</span>
+                    </div>
+                    <div class="card-body p-3 d-flex flex-column gap-2">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.05); border-left: 3px solid #01aac5;">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <span class="badge" style="background: rgba(1, 170, 197, 0.2); color: #01aac5; font-size: 0.7rem; font-weight: 700;">S &bull; SUBJECTIVE</span>
+                            </div>
+                            <p class="mb-0 text-theme-adaptive small" style="line-height: 1.45; font-size: 0.82rem;">${esc(soapSubjective)}</p>
+                        </div>
+                        <div class="p-2 rounded" style="background: rgba(16, 185, 129, 0.05); border-left: 3px solid #10b981;">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-size: 0.7rem; font-weight: 700;">O &bull; OBJECTIVE</span>
+                            </div>
+                            <p class="mb-0 text-theme-adaptive small" style="line-height: 1.45; font-size: 0.82rem;">${esc(soapObjective)}</p>
+                        </div>
+                        <div class="p-2 rounded" style="background: rgba(245, 158, 11, 0.05); border-left: 3px solid #f59e0b;">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; font-size: 0.7rem; font-weight: 700;">A &bull; ASSESSMENT</span>
+                            </div>
+                            <p class="mb-0 text-theme-adaptive small" style="line-height: 1.45; font-size: 0.82rem;">${esc(soapAssessment)}</p>
+                        </div>
+                        <div class="p-2 rounded" style="background: rgba(99, 102, 241, 0.05); border-left: 3px solid #6366f1;">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #6366f1; font-size: 0.7rem; font-weight: 700;">P &bull; PLAN</span>
+                            </div>
+                            <p class="mb-0 text-theme-adaptive small" style="line-height: 1.45; font-size: 0.82rem;">${esc(soapPlan)}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            if (typeof feather !== 'undefined') feather.replace();
+        })
+        .catch(err => {
+            bodyEl.innerHTML = '<div class="alert alert-danger mb-0">Error loading report: ' + esc(err.message) + '</div>';
+        });
+}
+</script>
+
+<!-- Patient Session Report Modal -->
+<div class="modal fade" id="patientReportModal" tabindex="-1" aria-labelledby="patientReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 680px;">
+
+        <div class="modal-content shadow border-0" style="border-radius: 1rem;">
+            <div class="modal-header border-bottom pb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i data-feather="file-text" style="width: 20px; height: 20px; color: #01aac5;"></i>
+                    <h5 class="modal-title fw-bold text-theme-adaptive mb-0" id="patientReportModalLabel">Session Report</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="patientReportModalBody">
+                <div class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    Loading session report...
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 justify-content-between">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm px-3" onclick="window.print()">
+                    <i data-feather="printer" class="me-1" style="width: 14px; height: 14px;"></i> Print Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

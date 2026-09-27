@@ -1,0 +1,888 @@
+{% extends "base.html" %}
+
+{% block title %}Clinician Dashboard - NeuroBeat{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Header -->
+    <div class="col-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2>Clinician Dashboard</h2>
+                <p class="text-muted mb-1">Dr. {{ user.first_name }} {{ user.last_name }}</p>
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                    <span class="badge profession-badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.35);">
+                        <i data-feather="briefcase" style="width: 13px; height: 13px; vertical-align: -1px; margin-right: 4px;"></i>
+                        Profession: <strong>{{ clinician_profile.profession or 'Not specified' }}</strong>
+                    </span>
+                    <span class="badge specialization-badge" style="background: rgba(7, 27, 42, 0.08); color: var(--text-secondary); border: 1px solid rgba(1, 170, 197, 0.2);">
+                        <i data-feather="award" style="width: 13px; height: 13px; vertical-align: -1px; margin-right: 4px;"></i>
+                        Specialization: <strong>{{ clinician_profile.specialization or 'General' }}</strong>
+                    </span>
+                    {% if clinician_profile.license_number %}
+                    <span class="badge text-muted" style="background: transparent; border: 1px solid var(--border-color, #e2e8f0);">
+                        License: {{ clinician_profile.license_number }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createPatientModal">
+                    <i data-feather="user-plus" class="me-2"></i>
+                    Create Patient
+                </button>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assignPatientModal">
+                    <i data-feather="users" class="me-2"></i>
+                    Assign Existing Patient
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="col-12 mb-4">
+        <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-lg-5">
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i data-feather="users" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h4>{{ patients|length }}</h4>
+                        <p class="text-muted mb-0 small">Active Patients</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i data-feather="activity" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h4>{{ total_sessions }}</h4>
+                        <p class="text-muted mb-0 small">Total Sessions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i data-feather="user-check" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h4>{{ unassigned_patients|length }}</h4>
+                        <p class="text-muted mb-0 small">Unassigned</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i data-feather="briefcase" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h5 class="text-truncate mb-1" title="{{ clinician_profile.profession or 'Not specified' }}">{{ clinician_profile.profession or 'Not specified' }}</h5>
+                        <p class="text-muted mb-0 small">Profession</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i data-feather="award" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h5 class="text-truncate mb-1" title="{{ clinician_profile.specialization or 'General' }}">{{ clinician_profile.specialization or 'General' }}</h5>
+                        <p class="text-muted mb-0 small">Specialization</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Patient Management -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="users" class="me-2"></i>
+                    Patient Management
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if patients %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Patient</th>
+                                    <th>Condition</th>
+                                    <th>Baseline Assessments</th>
+                                    <th>Last Session</th>
+                                    <th>Progress</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for patient in patients %}
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>{{ patient.user.first_name }} {{ patient.user.last_name }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ patient.user.email }}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">
+                                            {{ patient.condition.replace('_', ' ').title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if patient.assessments %}
+                                            {% for assessment in patient.assessments %}
+                                                <div class="mb-1">
+                                                    <small class="text-muted">{{ assessment.assessment_type.title() }}:</small>
+                                                    <strong>{{ assessment.measured_value|round(1) }}</strong>
+                                                    {% if assessment.assessment_type == 'gait' %}
+                                                        steps/min
+                                                    {% elif assessment.assessment_type == 'tapping' %}
+                                                        taps/min
+                                                    {% elif assessment.assessment_type == 'speech' %}
+                                                        syllables/min
+                                                    {% elif assessment.assessment_type == 'balance' %}
+                                                        /56
+                                                    {% elif assessment.assessment_type == 'coordination' %}
+                                                        sec
+                                                    {% elif assessment.assessment_type == 'cognitive' %}
+                                                        /30
+                                                    {% endif %}
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">No assessments</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if patient.sessions %}
+                                            {% set last_session = patient.sessions|selectattr('completed', 'equalto', True)|list|last %}
+                                            {% if last_session %}
+                                                {{ last_session.start_time.strftime('%m/%d/%Y') }}
+                                            {% else %}
+                                                No completed sessions
+                                            {% endif %}
+                                        {% else %}
+                                            No sessions
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if patient.sessions %}
+                                            {% set completed_sessions = patient.sessions|selectattr('completed', 'equalto', True)|list %}
+                                            {% set valid_acc_sessions = completed_sessions|selectattr('accuracy_score', 'ne', none)|list if completed_sessions else [] %}
+                                            {% if valid_acc_sessions %}
+                                                {% set avg_acc = (valid_acc_sessions|sum(attribute='accuracy_score'))/valid_acc_sessions|length %}
+                                                <span class="badge {% if avg_acc >= 80 %}bg-success{% elif avg_acc >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                                    {{ avg_acc|round|int }}%
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">N/A</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{{ url_for('progress_view', patient_id=patient.id) }}" class="btn btn-outline-primary" title="View Progress">
+                                                <i data-feather="bar-chart-2"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-outline-info" onclick="openAiReportModal({{ patient.id }}, '{{ patient.user.first_name }} {{ patient.user.last_name }}')" title="Generate AI Clinical SOAP Report">
+                                                <i data-feather="cpu"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setBaseline({{ patient.id }})" title="Set Baseline">
+                                                <i data-feather="settings"></i>
+                                            </button>
+                                            <a href="{{ url_for('patient_credentials', patient_id=patient.id) }}" class="btn btn-outline-warning btn-sm" title="View Credentials">
+                                                <i data-feather="key"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i data-feather="users" class="mb-3" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+                        <p class="text-muted">No patients assigned yet.</p>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assignPatientModal">
+                            <i data-feather="user-plus" class="me-2"></i>
+                            Assign Your First Patient
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Patient Modal -->
+<div class="modal fade" id="createPatientModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i data-feather="user-plus" class="me-2"></i>
+                    Create New Patient
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('create_patient') }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="first_name" class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="last_name" class="form-label">Last Name</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Primary Condition</label>
+                            <div class="d-flex gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="condition" id="patient_condition_parkinsons" value="parkinsons" required onchange="toggleStrokeFields()">
+                                    <label class="form-check-label" for="patient_condition_parkinsons">
+                                        Parkinson's Disease
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="condition" id="patient_condition_stroke" value="stroke" required onchange="toggleStrokeFields()">
+                                    <label class="form-check-label" for="patient_condition_stroke">
+                                        Stroke
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Stroke-specific fields -->
+                    <div id="strokeFields" style="display: none;" class="mt-4">
+                        <h6 class="text-muted mb-3">Stroke-Specific Information</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Affected Side</label>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="stroke_affected_side" id="affected_left" value="left">
+                                        <label class="form-check-label" for="affected_left">Left</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="stroke_affected_side" id="affected_right" value="right">
+                                        <label class="form-check-label" for="affected_right">Right</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="stroke_affected_side" id="affected_bilateral" value="bilateral">
+                                        <label class="form-check-label" for="affected_bilateral">Bilateral</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Stroke Severity</label>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="stroke_severity" id="severity_mild" value="mild">
+                                        <label class="form-check-label" for="severity_mild">Mild</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="stroke_severity" id="severity_moderate" value="moderate">
+                                        <label class="form-check-label" for="severity_moderate">Moderate</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="stroke_severity" id="severity_severe" value="severe">
+                                        <label class="form-check-label" for="severity_severe">Severe</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Aphasia Type</label>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="aphasia_type" id="aphasia_none" value="none">
+                                        <label class="form-check-label" for="aphasia_none">None</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="aphasia_type" id="aphasia_broca" value="broca">
+                                        <label class="form-check-label" for="aphasia_broca">Broca's</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="aphasia_type" id="aphasia_wernicke" value="wernicke">
+                                        <label class="form-check-label" for="aphasia_wernicke">Wernicke's</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="aphasia_type" id="aphasia_global" value="global">
+                                        <label class="form-check-label" for="aphasia_global">Global</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Dysarthria Severity</label>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="dysarthria_severity" id="dysarthria_none" value="none">
+                                        <label class="form-check-label" for="dysarthria_none">None</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="dysarthria_severity" id="dysarthria_mild" value="mild">
+                                        <label class="form-check-label" for="dysarthria_mild">Mild</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="dysarthria_severity" id="dysarthria_moderate" value="moderate">
+                                        <label class="form-check-label" for="dysarthria_moderate">Moderate</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="dysarthria_severity" id="dysarthria_severe" value="severe">
+                                        <label class="form-check-label" for="dysarthria_severe">Severe</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Motor Impairment</label>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="motor_impairment_level" id="motor_mild" value="mild">
+                                        <label class="form-check-label" for="motor_mild">Mild</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="motor_impairment_level" id="motor_moderate" value="moderate">
+                                        <label class="form-check-label" for="motor_moderate">Moderate</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="motor_impairment_level" id="motor_severe" value="severe">
+                                        <label class="form-check-label" for="motor_severe">Severe</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Cognitive Status</label>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="cognitive_status" id="cognitive_normal" value="normal">
+                                        <label class="form-check-label" for="cognitive_normal">Normal</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="cognitive_status" id="cognitive_mild" value="mild_impairment">
+                                        <label class="form-check-label" for="cognitive_mild">Mild Impairment</label>
+                                    </div>
+                                    <div class="form-check form-check-sm">
+                                        <input class="form-check-input" type="radio" name="cognitive_status" id="cognitive_moderate" value="moderate_impairment">
+                                        <label class="form-check-label" for="cognitive_moderate">Moderate Impairment</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i data-feather="info" class="me-2"></i>
+                        <strong>Important:</strong> After creating the patient account, please share the login credentials with your patient so they can access their dashboard and begin therapy sessions.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create Patient</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Patient Modal -->
+<div class="modal fade" id="assignPatientModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i data-feather="user-plus" class="me-2"></i>
+                    Assign Patient
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if unassigned_patients %}
+                    <p>Select a patient to assign to your care:</p>
+                    <div class="list-group">
+                        {% for patient in unassigned_patients %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ patient.user.first_name }} {{ patient.user.last_name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ patient.user.email }}</small>
+                                <br>
+                                <span class="badge bg-info">{{ patient.condition.replace('_', ' ').title() }}</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="assignPatient({{ patient.id }})">
+                                Assign
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i data-feather="users" class="mb-2" style="width: 32px; height: 32px; opacity: 0.5;"></i>
+                        <p class="text-muted">No unassigned patients available.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function assignPatient(patientId) {
+    try {
+        const response = await fetch('/assign_patient', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                patient_id: patientId
+            })
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to assign patient. Please try again.');
+        }
+    } catch (error) {
+        console.error('Error assigning patient:', error);
+        alert('Failed to assign patient. Please try again.');
+    }
+}
+
+function setBaseline(patientId) {
+    window.location.href = `/baseline/assessment?patient_id=${patientId}`;
+}
+
+function toggleStrokeFields() {
+    const strokeFields = document.getElementById('strokeFields');
+    const conditionRadios = document.querySelectorAll('input[name="condition"]');
+    let selectedCondition = null;
+
+    conditionRadios.forEach(radio => {
+        if (radio.checked) {
+            selectedCondition = radio.value;
+        }
+    });
+
+    if (strokeFields) {
+        if (selectedCondition === 'stroke') {
+            strokeFields.style.display = 'block';
+            // Make stroke fields required
+            strokeFields.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.required = true;
+            });
+        } else {
+            strokeFields.style.display = 'none';
+            // Remove required attribute from stroke fields
+            strokeFields.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.required = false;
+            });
+        }
+    }
+}
+
+// ==========================================
+// Few-Shot Gemini AI Clinical Report Modal
+// ==========================================
+let currentAiPatientId = null;
+let currentAiReportModal = null;
+
+function openAiReportModal(patientId, patientName) {
+    currentAiPatientId = patientId;
+    document.getElementById('aiReportPatientName').textContent = patientName || `Patient #${patientId}`;
+    
+    const modalEl = document.getElementById('aiReportModal');
+    if (!currentAiReportModal) {
+        currentAiReportModal = new bootstrap.Modal(modalEl);
+    }
+    currentAiReportModal.show();
+    if (typeof feather !== 'undefined') feather.replace();
+    
+    generateAiReport();
+}
+
+let currentStructuredReportData = null;
+
+function renderStructuredReport(data) {
+    if (!data) return '<p class="text-muted">No report data generated.</p>';
+
+    function esc(s) {
+        if (!s) return '';
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function fmtDur(seconds) {
+        if (!seconds) return 'N/A';
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
+    const activity = esc(data.activity_type || 'Rehabilitation Session');
+    const durStr = fmtDur(data.duration_seconds);
+    const startBpm = data.initial_bpm ? `${Math.round(data.initial_bpm)} BPM` : 'N/A';
+    const finalBpm = data.final_bpm ? `${Math.round(data.final_bpm)} BPM` : 'N/A';
+    const avgBpm = data.avg_bpm ? `${Math.round(data.avg_bpm)} BPM` : (data.final_bpm ? `${Math.round(data.final_bpm)} BPM` : 'N/A');
+    const targetBpm = data.target_bpm ? `${Math.round(data.target_bpm)} BPM` : 'N/A';
+    const accStr = data.accuracy_score !== null && data.accuracy_score !== undefined ? `${Math.round(data.accuracy_score)}%` : 'Adherence Established';
+    const movementCount = data.movement_count || 'Recorded';
+
+    let html = `
+    <!-- Print-only Hospital Header -->
+    <div class="print-only-header text-center pb-3 border-bottom mb-4">
+        <h3 class="fw-bold mb-1" style="color: #042046;">NEUROBEAT &bull; CLINICAL REHABILITATION REPORT</h3>
+        <p class="text-muted small mb-0">Confidential Medical Documentation &bull; AI-Assisted Rehabilitation Telemetry</p>
+    </div>
+
+    <!-- 1. Objective Session Summary (Deterministic Layer 1) -->
+    <div class="card border-0 shadow-sm mb-4" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+        <div class="card-header bg-transparent border-bottom py-3">
+            <h6 class="fw-bold mb-0 text-theme-adaptive">
+                <i data-feather="activity" class="me-2 text-primary" style="width: 18px; height: 18px;"></i>
+                SESSION SUMMARY & OBJECTIVE METRICS
+            </h6>
+        </div>
+        <div class="card-body p-3">
+            <div class="row g-2 text-center mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.06); border: 1px solid rgba(1, 170, 197, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">ACTIVITY</small>
+                        <strong class="text-theme-adaptive small">${activity}</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.06); border: 1px solid rgba(1, 170, 197, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">DURATION</small>
+                        <strong class="text-theme-adaptive small">${durStr}</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">ACCURACY</small>
+                        <strong class="text-success small">${accStr}</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">CADENCE (BPM)</small>
+                        <strong class="text-theme-adaptive small">${startBpm} &rarr; ${finalBpm}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-2 rounded mb-0" style="background: rgba(1, 170, 197, 0.03); border-left: 3px solid #01aac5;">
+                <p class="mb-0 small text-theme-adaptive" style="line-height: 1.6;">${esc(data.summary)}</p>
+            </div>
+        </div>
+    </div>`;
+
+    function ensureArray(val) {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch(e) {}
+            }
+            return trimmed ? [trimmed] : [];
+        }
+        return [String(val)];
+    }
+
+    // 2. What You Did
+    const whatYouDid = ensureArray(data.what_you_did);
+    if (whatYouDid.length > 0) {
+        html += `
+        <div class="card border-0 shadow-sm mb-3" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2 text-theme-adaptive small text-uppercase" style="letter-spacing: 0.5px;">
+                    <i data-feather="check-circle" class="me-1 text-success" style="width: 15px; height: 15px;"></i>
+                    What You Did
+                </h6>
+                <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.7;">
+                    ${whatYouDid.map(item => `<li>${esc(item)}</li>`).join('')}
+                </ul>
+            </div>
+        </div>`;
+    }
+
+    // 3. Observations & Areas to Improve
+    const obs = ensureArray(data.performance_observations);
+    const imp = ensureArray(data.what_to_improve);
+    if (obs.length > 0 || imp.length > 0) {
+        html += `
+        <div class="row g-3 mb-3">
+            ${obs.length > 0 ? `
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold mb-2 text-theme-adaptive small text-uppercase" style="letter-spacing: 0.5px;">
+                            <i data-feather="eye" class="me-1 text-info" style="width: 15px; height: 15px;"></i>
+                            Performance Observations
+                        </h6>
+                        <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.6;">
+                            ${obs.map(item => `<li>${esc(item)}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>` : ''}
+
+            ${imp.length > 0 ? `
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold mb-2 text-theme-adaptive small text-uppercase" style="letter-spacing: 0.5px;">
+                            <i data-feather="trending-up" class="me-1 text-warning" style="width: 15px; height: 15px;"></i>
+                            What To Improve Next Time
+                        </h6>
+                        <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.6;">
+                            ${imp.map(item => `<li>${esc(item)}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>` : ''}
+        </div>`;
+    }
+
+    // 4. Clinical Recommendations
+    const recs = ensureArray(data.recommendations);
+    if (recs.length > 0) {
+        html += `
+        <div class="card border-0 shadow-sm mb-4" style="background: rgba(1, 170, 197, 0.04); border-left: 4px solid #01aac5 !important; border: 1px solid rgba(1, 170, 197, 0.2);">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2 small text-uppercase" style="color: #01aac5; letter-spacing: 0.5px;">
+                    <i data-feather="compass" class="me-1" style="width: 15px; height: 15px;"></i>
+                    Clinical Recommendations
+                </h6>
+                <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.6;">
+                    ${recs.map(item => `<li>${esc(item)}</li>`).join('')}
+                </ul>
+            </div>
+        </div>`;
+    }
+
+
+    // 5. Professional SOAP Progress Note
+    const soap = data.soap || {};
+    html += `
+    <div class="card border-0 shadow-sm mb-3" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+        <div class="card-header bg-transparent border-bottom py-2">
+            <span class="badge" style="background: rgba(99, 102, 241, 0.12); color: #6366f1; font-weight: 700; font-size: 0.78rem;">
+                SOAP PROGRESS NOTE
+            </span>
+        </div>
+        <div class="card-body p-3">
+            <div class="soap-cards-stack d-flex flex-column gap-2">
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #01aac5 !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; font-weight: 700; font-size: 0.78rem;">S &bull; SUBJECTIVE</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.subjective || 'Patient completed auditory-motor session without distress.')}</p>
+                </div>
+
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #10b981 !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; font-size: 0.78rem;">O &bull; OBJECTIVE</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.objective || 'Objective session metrics recorded.')}</p>
+                </div>
+
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #f59e0b !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-weight: 700; font-size: 0.78rem;">A &bull; ASSESSMENT</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.assessment || 'Motor adaptation proceeding as prescribed.')}</p>
+                </div>
+
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #6366f1 !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #6366f1; font-weight: 700; font-size: 0.78rem;">P &bull; PLAN</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.plan || 'Continue rhythmic auditory stimulation protocol.')}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Footer -->
+    <div class="d-flex justify-content-between align-items-center small text-muted pt-2 border-top">
+        <span>Engine: <code class="text-theme-adaptive">${esc(data.ai_model || 'gemini-3.5-flash-lite')}</code> ${data.cached ? '<span class="badge bg-secondary ms-1">Cached</span>' : '<span class="badge bg-success ms-1">Live</span>'}</span>
+        <span>Stored: ${esc(data.created_at || new Date().toLocaleString())}</span>
+    </div>`;
+
+    return html;
+}
+
+async function generateAiReport(forceRefresh = false) {
+    if (!currentAiPatientId) return;
+    
+    const loadingEl = document.getElementById('aiReportLoading');
+    const contentEl = document.getElementById('aiReportContent');
+    const errorEl = document.getElementById('aiReportError');
+    const containerEl = document.getElementById('aiReportFormattedContainer');
+    const timeEl = document.getElementById('aiReportTimestamp');
+    
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    if (typeof feather !== 'undefined') feather.replace();
+    
+    try {
+        const url = `/api/clinician/ai-report/${currentAiPatientId}${forceRefresh ? '?refresh=1' : ''}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && (data.success !== false)) {
+            currentStructuredReportData = data;
+            if (containerEl) {
+                containerEl.innerHTML = renderStructuredReport(data);
+            }
+            if (timeEl) {
+                timeEl.textContent = data.created_at ? `Documented: ${data.created_at}` : `Generated: ${new Date().toLocaleDateString()}`;
+            }
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+            if (typeof feather !== 'undefined') feather.replace();
+        } else {
+            throw new Error(data.error || 'Failed to generate clinical report');
+        }
+    } catch (err) {
+        console.error('Error generating AI report:', err);
+        document.getElementById('aiReportErrorText').textContent = err.message || 'Error communicating with AI engine';
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        if (typeof feather !== 'undefined') feather.replace();
+    }
+}
+
+function copyAiReport() {
+    if (!currentStructuredReportData) return;
+    const d = currentStructuredReportData;
+    const s = d.soap || {};
+    const text = `NEUROBEAT CLINICAL PROGRESS REPORT\n` +
+        `Activity: ${d.activity_type || 'Rehabilitation'}\n` +
+        `Duration: ${d.duration_seconds || 0}s | Cadence: ${d.initial_bpm || 'N/A'} -> ${d.final_bpm || 'N/A'} BPM | Accuracy: ${d.accuracy_score !== null && d.accuracy_score !== undefined ? d.accuracy_score + '%' : 'Adherence'}\n\n` +
+        `SUMMARY:\n${d.summary || ''}\n\n` +
+        `SOAP PROGRESS NOTE:\n` +
+        `S (Subjective): ${s.subjective || ''}\n` +
+        `O (Objective): ${s.objective || ''}\n` +
+        `A (Assessment): ${s.assessment || ''}\n` +
+        `P (Plan): ${s.plan || ''}\n\n` +
+        `RECOMMENDATIONS:\n` +
+        (d.recommendations ? d.recommendations.map(r => `• ${r}`).join('\n') : '');
+
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btnCopyReport');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<i data-feather="check" class="me-1"></i> Copied!';
+        if (typeof feather !== 'undefined') feather.replace();
+        setTimeout(() => {
+            btn.innerHTML = origHtml;
+            if (typeof feather !== 'undefined') feather.replace();
+        }, 2000);
+    }).catch(err => {
+        console.error('Clipboard copy failed:', err);
+    });
+}
+
+function printClinicalReport() {
+    window.print();
+}
+</script>
+
+<!-- AI Clinical Report Modal -->
+<div class="modal fade" id="aiReportModal" tabindex="-1" aria-labelledby="aiReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content shadow">
+            <div class="modal-header border-bottom">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0" id="aiReportModalLabel">
+                        <i data-feather="file-text" class="me-2 text-info"></i>
+                        Clinical Progress Report &bull; <span id="aiReportPatientName">Patient</span>
+                    </h5>
+                    <small class="text-muted">Objective Rehabilitation Telemetry & Clinical Documentation</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Loading State -->
+                <div id="aiReportLoading" class="text-center py-5">
+                    <div class="spinner-border text-info mb-3" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h6 class="fw-semibold text-theme-adaptive mb-1">Synthesizing Rehabilitation Telemetry...</h6>
+                    <p class="text-muted small mb-0" style="max-width: 420px; margin: 0 auto;">
+                        Analyzing session trajectories, motor rhythm adherence, and formatting clinical documentation.
+                    </p>
+                </div>
+
+                <!-- Report Content -->
+                <div id="aiReportContent" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
+                            <i data-feather="check-circle" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+                            Structured Clinical Report & SOAP
+                        </span>
+                        <small class="text-muted" id="aiReportTimestamp"></small>
+                    </div>
+
+                    <div id="aiReportFormattedContainer"></div>
+                </div>
+
+                <!-- Error State -->
+                <div id="aiReportError" class="alert alert-danger py-3 px-4 mb-0" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <i data-feather="alert-circle" class="me-2" style="width: 20px; height: 20px;"></i>
+                        <div>
+                            <strong class="d-block">Error Generating Report</strong>
+                            <span id="aiReportErrorText" class="small">Unable to communicate with the clinical analysis engine.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-primary" id="btnPrintReport" onclick="printClinicalReport()">
+                    <i data-feather="printer" class="me-1"></i> Print Report / SOAP Note
+                </button>
+                <button type="button" class="btn btn-outline-info" id="btnCopyReport" onclick="copyAiReport()">
+                    <i data-feather="copy" class="me-1"></i> Copy to Clipboard
+                </button>
+                <button type="button" class="btn btn-primary" onclick="generateAiReport(true)">
+                    <i data-feather="refresh-cw" class="me-1"></i> Regenerate
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
