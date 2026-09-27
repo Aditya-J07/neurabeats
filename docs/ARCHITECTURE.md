@@ -96,7 +96,7 @@ To satisfy medical requirements for **zero-latency biofeedback** and **strict pa
 
 ## 4. Database Schema & Data Models
 
-The relational database architecture is defined in [`models.py`](file:///c:/Users/gurus/work/NITS_HACK_2026/models.py):
+The relational database architecture is defined in [`models.py`](../models.py):
 
 ```mermaid
 erDiagram

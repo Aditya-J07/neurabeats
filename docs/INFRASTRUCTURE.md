@@ -47,7 +47,7 @@ NeuroBeat utilizes a decoupled **Edge-Client / Cloud-Server** execution model:
 ### Option B: Railway.app (Automatic Procfile Deployment)
 
 1. Log in to [Railway](https://railway.app) and select **New Project** $\rightarrow$ **Deploy from GitHub repo**.
-2. Railway detects [`Procfile`](file:///c:/Users/gurus/work/NITS_HACK_2026/Procfile) (`web: gunicorn main:app`) and [`requirements.txt`](file:///c:/Users/gurus/work/NITS_HACK_2026/requirements.txt).
+2. Railway detects [`Procfile`](../Procfile) (`web: gunicorn main:app`) and [`requirements.txt`](../requirements.txt).
 3. Under **Variables**, add:
    - `SESSION_SECRET`
    - `GEMINI_API_KEY`
@@ -150,4 +150,4 @@ docker run -d -p 5000:5000 --env-file .env neurobeat
   $$\text{Workers} = (2 \times \text{CPU Cores}) + 1$$
   *(For a standard 2-core cloud VPS, run 5 Gunicorn workers).*
 * **Memory Headroom**: Each worker consumes approximately 35MB–45MB. 4 workers comfortably operate in less than 200MB of total system RAM.
-* **Connection Pooling**: SQLAlchemy engine options are configured with `pool_recycle=300` and `pool_pre_ping=True` in [`app.py`](file:///c:/Users/gurus/work/NITS_HACK_2026/app.py) to prevent stale database connections on managed cloud databases.
+* **Connection Pooling**: SQLAlchemy engine options are configured with `pool_recycle=300` and `pool_pre_ping=True` in [`app.py`](../app.py) to prevent stale database connections on managed cloud databases.

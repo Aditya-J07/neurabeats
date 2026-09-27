@@ -4,19 +4,27 @@ Welcome to the organized architectural documentation suite for **NURO-BEATS**. A
 
 ---
 
-## 🏛️ Project Directory & Quick Links
+## 🏛️ Comprehensive Documentation Directory & Quick Links
 
 ```
 docs/
 ├── README.md                                    <-- You are here (Master Overview)
+├── API.md                                       # Complete REST & Integrated APIs Specification
+├── ARCHITECTURE.md                              # System Architecture, Tri-Agent Design & Telemetry Flow
+├── DEMO.md                                      # Live Demo Guide, Script & Jury Pitch
+├── INFRASTRUCTURE.md                            # Deployment Guide, Cloud Hosting & Containerization
+├── MEASUREMENT_SPEC.md                          # Clinical Kinematics & Biomechanical Metrics Spec
+├── ML.md                                        # Machine Learning, ONNX Causal TCN & Audio Models
 │
-├── PROJECT_1_FULLSTACK_GEMINI/                  <-- Project 1 Documentation Suite
+├── images/                                      # Application UI & Clinical Progress Screenshots
+│
+├── PROJECT_1_FULLSTACK_GEMINI/                  # Full-Stack Gemini Clinical Reporting Suite
 │   ├── README.md                                # Master overview, tech stack & setup
 │   ├── ARCHITECTURE.md                          # Data flow, perception pipeline & DB schema
 │   ├── CLINICAL_REPORTING_SOAP.md               # Gemini 2.5 Flash, SOAP notes & 9-feature layer
 │   └── INTERVIEW_TALKING_POINTS.md              # STAR stories, architecture defense & Q&A
 │
-└── PROJECT_2_HUGGINGFACE_AI_ML/                 <-- Project 2 Documentation Suite
+└── PROJECT_2_HUGGINGFACE_AI_ML/                 # Hugging Face & Open-Source Audio Suite
     ├── README.md                                # Master overview & model lineup
     ├── ARCHITECTURE.md                          # Dual-engine architecture & signal processing math
     ├── MODEL_BENCHMARKS_AND_ROUTER.md           # HF Inference Router benchmarks & serverless vs dedicated

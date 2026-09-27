@@ -1,3 +1,4 @@
+Set-Location "$PSScriptRoot\.."
 $env:SESSION_SECRET = "super_secret_session_key_123"
 $env:JWT_SECRET_KEY = "super_secret_jwt_key_456"
 $env:PORT = "8000"

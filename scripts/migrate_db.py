@@ -19,7 +19,8 @@ def migrate_database(db_path=None):
     Preserves all existing tables and data.
     """
     if db_path is None:
-        db_path = os.path.join('instance', 'neurobeat.db')
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        db_path = os.path.join(project_root, 'instance', 'neurobeat.db')
 
     if not os.path.exists(db_path):
         print(f"Database at {db_path} does not exist yet. Please run app first.")

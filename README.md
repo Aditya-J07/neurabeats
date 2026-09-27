@@ -23,10 +23,12 @@
 5. [Key Clinical Modules](#-key-clinical-modules)
 6. [Scalability & Production Readiness](#-scalability--production-readiness)
 7. [Screenshots & Visual Interface](#-screenshots--visual-interface)
-8. [Local Installation & Quick Start](#-local-installation--quick-start)
-9. [Deployment Options](#-deployment-options)
-10. [Documentation Index](#-documentation-index)
-11. [Clinical References & Scientific Studies](#-clinical-references--scientific-studies)
+8. [Repository Architecture & Directory Layout](#-repository-architecture--directory-layout)
+9. [Local Installation & Quick Start](#-local-installation--quick-start)
+10. [Deployment Options](#-deployment-options)
+11. [Testing & Verification](#-testing--verification)
+12. [Documentation Index](#-documentation-index)
+13. [Clinical References & Scientific Studies](#-clinical-references--scientific-studies)
 
 ---
 
@@ -226,11 +228,77 @@ NeuroBeat is structured around **three specialized, cooperatively orchestrated A
 
 ---
 
+## 📁 Repository Architecture & Directory Layout
+
+NeuroBeat is structured into clean, modular layers separating client perception, server orchestration, AI inference, and deployment automation:
+
+```
+├── docs/                               # Master Technical & Clinical Documentation
+│   ├── README.md                       # Documentation Suite Index & Quick Links
+│   ├── API.md                          # Complete REST API & Integrated Services Specification
+│   ├── ARCHITECTURE.md                 # System Architecture, Tri-Agent Design & Telemetry Flow
+│   ├── DEMO.md                         # Live Demo Script, Timeline & Jury Q&A Guide
+│   ├── INFRASTRUCTURE.md               # Cloud Deployment (Render/Railway), Docker & Tuning
+│   ├── MEASUREMENT_SPEC.md             # Biomechanical Metrics & Cadence Specifications
+│   ├── ML.md                           # ONNX Causal TCN & Hugging Face Audio Architecture
+│   ├── images/                         # Production Application Screenshots & Progress Charts
+│   ├── PROJECT_1_FULLSTACK_GEMINI/     # Full-Stack Gemini Clinical Reporting Suite
+│   └── PROJECT_2_HUGGINGFACE_AI_ML/    # Hugging Face & Open-Source Audio Suite
+│
+├── scripts/                            # Local Launchers & Database Automation
+│   ├── migrate_db.py                   # Relational database migration utility with auto-backup
+│   ├── run.bat                         # Windows one-click local launcher
+│   ├── start.ps1                       # Windows PowerShell service runner
+│   └── start.sh                        # Linux / macOS startup script
+│
+├── api/                                # Modular Flask REST API Blueprints
+│   ├── auth/                           # User registration, login & JWT authentication
+│   ├── patients/                       # Patient profiles & longitudinal history
+│   ├── sessions/                       # Real-time session telemetry & metric ingestion
+│   └── assessments/                    # Kinematic & cadence baseline assessments
+│
+├── backend/                            # FastAPI alternative service layer & routers
+├── frontend/                           # Lightweight HTML5 / Vanilla CSS client
+├── frontend-react/                     # React + Vite client with MediaPipe WASM models
+│
+├── services/                           # Core Business Logic & AI Services
+│   ├── gemini_service.py               # Gemini 2.5 Flash clinical reporting & SOAP engine
+│   ├── historical_analysis.py          # 9-feature longitudinal RAG & trajectory analysis
+│   ├── ai_provider.py                  # Multi-provider AI abstraction interface
+│   ├── measurement_service.py          # Kinematic cadence & synchronization math
+│   └── prompt_service.py               # Clinical medical prompt templates
+│
+├── models/                             # Machine Learning Weights & ONNX Models
+│   ├── p4_phase_tcn.onnx               # Causal Temporal Convolutional Network model
+│   └── p4_phase_tcn.onnx.data          # Serialized neural tensor weights
+│
+├── runtime/                            # Inference & Replay Engines
+├── static/                             # Frontend styles, client JS engines & audio assets
+├── templates/                          # Jinja2 server-rendered views (Dashboards, Therapy rooms)
+├── tests/                              # Comprehensive Python & Vitest test suites (100+ tests)
+├── training/                           # Neural network benchmarks & training scripts
+│
+├── app.py                              # Flask application factory & database configuration
+├── main.py                             # Full-stack monolithic application entrypoint
+├── api_main.py                         # Headless REST API entrypoint
+├── beat_generator.py                   # Acoustic synthesis router (MusicGen + Tone.js fallback)
+├── session_modes.py                    # Therapy modalities (Gait, Speech, Finger Tapping)
+├── models.py                           # SQLAlchemy database models & relational schema
+├── routes.py                           # Web route handlers & telemetry controllers
+│
+├── Procfile                            # Cloud process definition for Render & Railway
+├── render_start.sh                     # Render web service container startup script
+├── requirements.txt                    # Production Python dependencies
+└── vercel.json                         # Edge frontend configuration
+```
+
+---
+
 ## ⚡ Local Installation & Quick Start
 
 ### Prerequisites
 * **Python**: 3.11 or higher
-* **Node.js**: 18+ (optional, for running React Vitest testbed)
+* **Node.js**: 18+ (optional, for React frontend / Vitest tests)
 * **Git**: Installed on your system
 
 ### 1. Clone Repository & Setup Environment
@@ -253,24 +321,23 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment Variables
-Copy the example environment file:
-```bash
-cp .env.example .env
-```
-Open `.env` in your editor and provide your keys:
-```env
-SESSION_SECRET=neurobeat-secure-session-key-32chars
-JWT_SECRET_KEY=neurobeat-jwt-secure-key-32chars
-GEMINI_API_KEY=your_gemini_api_key_here
-HUGGINGFACE_API_TOKEN=your_huggingface_token_optional
-DATABASE_URL=sqlite:///instance/neurobeat.db
-```
-
-### 4. Run Application
+### 3. Launch the Platform
+You can start the full web platform directly using Python:
 ```bash
 python main.py
 ```
+Or use the convenience scripts inside the [`scripts/`](scripts/) directory:
+```powershell
+# On Windows PowerShell:
+.\scripts\start.ps1
+
+# On Windows Command Prompt:
+scripts\run.bat
+
+# On Linux/macOS:
+./scripts/start.sh
+```
+
 Open your browser and navigate to: **`http://localhost:5000`**
 
 ---
@@ -280,30 +347,30 @@ Open your browser and navigate to: **`http://localhost:5000`**
 NeuroBeat is pre-configured for one-click deployment on modern cloud platforms:
 
 ### Deploy to Render
-1. Create a **New Web Service** connected to your repository.
+1. Create a **New Web Service** connected to your repository (`Aditya-J07/neurabeats`, branch `final`).
 2. Set **Build Command**: `pip install -r requirements.txt`
-3. Set **Start Command**: `gunicorn main:app`
-4. Add Environment Variables: `GEMINI_API_KEY`, `SESSION_SECRET`.
-5. *(Optional)* Add a free managed PostgreSQL database and set `DATABASE_URL`.
+3. Set **Start Command**: `gunicorn main:app` (or `./render_start.sh`)
+4. Add Environment Variables: `GEMINI_API_KEY`, `SESSION_SECRET`, `JWT_SECRET_KEY`.
+5. *(Optional)* Add a managed PostgreSQL database and set `DATABASE_URL`.
 
 ### Deploy to Railway
 1. Click **New Project** $\rightarrow$ **Deploy from GitHub Repo**.
-2. Railway detects [`Procfile`](file:///c:/Users/gurus/work/NITS_HACK_2026/Procfile) (`web: gunicorn main:app`) and [`requirements.txt`](file:///c:/Users/gurus/work/NITS_HACK_2026/requirements.txt) automatically.
-3. Configure `GEMINI_API_KEY` and `SESSION_SECRET` in Variables.
+2. Railway detects [`Procfile`](Procfile) (`web: gunicorn main:app`) and [`requirements.txt`](requirements.txt) automatically.
+3. Configure `GEMINI_API_KEY`, `SESSION_SECRET`, and `JWT_SECRET_KEY` under **Variables**.
 
-*(For detailed cloud configurations, Dockerfiles, and Nginx reverse proxy guides, see [`INFRASTRUCTURE.md`](file:///c:/Users/gurus/work/NITS_HACK_2026/INFRASTRUCTURE.md)).*
+*(For detailed cloud configurations, Dockerfiles, and Nginx reverse proxy guides, see [`docs/INFRASTRUCTURE.md`](docs/INFRASTRUCTURE.md)).*
 
 ---
 
 ## 🧪 Testing & Verification
 
-NeuroBeat enforces high test coverage across both backend Python APIs and frontend kinematic logic:
+NeuroBeat enforces rigorous automated testing across backend Python APIs, database migrations, and frontend kinematic logic:
 
 ```bash
-# Run Python backend unit tests (106 tests)
+# Run Python backend unit and integration tests (106 tests)
 python -m unittest discover tests
 
-# Run Frontend Vitest suite (103 tests)
+# Run Frontend Vitest kinematic suite (103 tests)
 cd frontend-react && npm test -- --run
 ```
 
@@ -315,10 +382,15 @@ All 209 automated tests pass with 0 errors.
 
 | Document | Purpose |
 | :--- | :--- |
-| **[`ARCHITECTURE.md`](file:///c:/Users/gurus/work/NITS_HACK_2026/ARCHITECTURE.md)** | Comprehensive blueprint of the Tri-Agent system, edge compute, and state machines. |
-| **[`API.md`](file:///c:/Users/gurus/work/NITS_HACK_2026/API.md)** | Full REST API reference for authentication, telemetry streams, and AI reports. |
-| **[`INFRASTRUCTURE.md`](file:///c:/Users/gurus/work/NITS_HACK_2026/INFRASTRUCTURE.md)** | Cloud hosting, Docker, CI/CD, database persistence, and scalability guide. |
-| **[`MEASUREMENT_SPEC.md`](file:///c:/Users/gurus/work/NITS_HACK_2026/MEASUREMENT_SPEC.md)** | Biomechanical definitions for cadence (SPM), timing error (ms), and phase offset. |
+| **[`docs/README.md`](docs/README.md)** | Master documentation suite overview & side-by-side comparison of subsystems. |
+| **[`docs/API.md`](docs/API.md)** | Complete specification of external APIs (Gemini, Hugging Face, MediaPipe) & REST endpoints. |
+| **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | Comprehensive blueprint of the Tri-Agent system, edge compute, and state machines. |
+| **[`docs/DEMO.md`](docs/DEMO.md)** | Live demonstration guide, 3-minute pitch script, and anticipated jury questions. |
+| **[`docs/INFRASTRUCTURE.md`](docs/INFRASTRUCTURE.md)** | Cloud hosting, Render, Railway, Docker, database persistence, and scalability guide. |
+| **[`docs/MEASUREMENT_SPEC.md`](docs/MEASUREMENT_SPEC.md)** | Biomechanical definitions for cadence (SPM), timing error (ms), and phase offset. |
+| **[`docs/ML.md`](docs/ML.md)** | Machine learning models, ONNX Causal TCN, and Hugging Face MusicGen architecture. |
+| **[`docs/PROJECT_1_FULLSTACK_GEMINI/`](docs/PROJECT_1_FULLSTACK_GEMINI/)** | Full-Stack Gemini clinical reporting deep dive & technical interview talking points. |
+| **[`docs/PROJECT_2_HUGGINGFACE_AI_ML/`](docs/PROJECT_2_HUGGINGFACE_AI_ML/)** | Hugging Face audio router, model benchmarks, and open-source AI defense. |
 
 ---
 
@@ -334,3 +406,4 @@ All 209 automated tests pass with 0 errors.
 ## 👥 Contributors & Acknowledgements
 * **Aditya Jha** & Team String Coders
 * Clinical advisors, speech therapists, and neuro-rehabilitation researchers whose published open-access studies informed our algorithmic parameters.
+

@@ -1,4 +1,5 @@
 #!/bin/bash
+cd "$(dirname "$0")/.."
 
 # Start the Flask API backend on port 8000
 BACKEND_PORT=8000 uv run python api_main.py &

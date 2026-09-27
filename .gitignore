@@ -43,6 +43,8 @@ frontend-react/node_modules/
 *.local
 .npm/
 .eslintcache
+uv.lock
+replit.md
 
 # Environment variables & secrets
 .env

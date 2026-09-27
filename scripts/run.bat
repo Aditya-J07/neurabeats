@@ -8,7 +8,7 @@ echo =====================================================================
 echo.
 
 set "SCRIPT_DIR=%~dp0"
-cd /d "%SCRIPT_DIR%"
+cd /d "%SCRIPT_DIR%.."
 
 :: 1. Clean up any existing instances on port 5000
 echo [1/3] Checking and freeing port 5000...
