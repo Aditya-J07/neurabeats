@@ -79,3 +79,7 @@ with app.app_context():
     import models  # noqa: F401
     db.create_all()
     logging.info("Database tables created successfully")
+
+# Import routes to ensure routes are registered regardless of entry point (app:app, main:app, wsgi:app)
+import routes  # noqa: F401, E402
+
