@@ -76,4 +76,18 @@ def create_app():
     app.register_blueprint(sessions_bp, url_prefix='/api/sessions')
     app.register_blueprint(assessments_bp, url_prefix='/api/assessments')
     
+    @app.route('/')
+    def root():
+        from flask import jsonify
+        return jsonify({
+            "status": "online",
+            "service": "NeuroBeat API",
+            "endpoints": [
+                "/api/auth",
+                "/api/patients",
+                "/api/sessions",
+                "/api/assessments"
+            ]
+        })
+    
     return app
