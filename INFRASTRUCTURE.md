@@ -60,7 +60,7 @@ NeuroBeat utilizes a decoupled **Edge-Client / Cloud-Server** execution model:
 #### 1. System Setup
 ```bash
 sudo apt update && sudo apt install -y python3-pip python3-venv git nginx
-git clone https://github.com/Aditya-J07/Nuro-Beats-BFB.git /var/www/neurobeat
+git clone https://github.com/Aditya-J07/neurabeats.git /var/www/neurobeat
 cd /var/www/neurobeat
 python3 -m venv .venv
 source .venv/bin/activate

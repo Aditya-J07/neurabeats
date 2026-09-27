@@ -231,8 +231,8 @@ NeuroBeat is structured around **three specialized, cooperatively orchestrated A
 ### 1. Clone Repository & Setup Environment
 ```bash
 # Clone the repository
-git clone https://github.com/Aditya-J07/Nuro-Beats-BFB.git
-cd Nuro-Beats-BFB
+git clone https://github.com/Aditya-J07/neurabeats.git
+cd neurabeats
 
 # Create and activate Python virtual environment
 python -m venv .venv
