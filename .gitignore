@@ -152,3 +152,8 @@ scratch/
 *.dump
 *.sql
 *.parquet
+
+# Allow presentation demo assets
+!presentation-demo/
+!presentation-demo/**
+

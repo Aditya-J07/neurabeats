@@ -1,5 +1,6 @@
 # 🎵 NeuroBeat – AI-Powered Neurological Music Therapy & Rhythmic Auditory Stimulation (RAS)
 
+[![Live Demo](https://img.shields.io/badge/Live_Deployment-neurabeats.onrender.com-01AAC5?style=for-the-badge&logo=render&logoColor=white)](https://neurabeats.onrender.com/)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Flask Framework](https://img.shields.io/badge/Flask-3.1.2-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![Google Gemini 2.5 Flash](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
@@ -8,6 +9,7 @@
 [![ONNX Runtime](https://img.shields.io/badge/ONNX_Runtime-Causal_TCN-005CED?style=for-the-badge&logo=onnx&logoColor=white)](https://onnxruntime.ai/)
 [![Tests Passing](https://img.shields.io/badge/Tests-106_Passed-10b981?style=for-the-badge&logo=pytest&logoColor=white)](#testing--verification)
 
+> 🌐 **Live Web Application**: **[https://neurabeats.onrender.com](https://neurabeats.onrender.com)**  
 > **NeuroBeat** is a clinical-grade, closed-loop neurological rehabilitation platform combining **Rhythmic Auditory Stimulation (RAS)**, **Edge Biomechanical Kinematics**, and **Tri-Agent Artificial Intelligence** to retrain gait, motor coordination, and speech rhythm in patients with Parkinson's Disease and post-stroke motor impairments.
 
 ---
@@ -250,6 +252,11 @@ NeuroBeat is structured into clean, modular layers separating client perception,
 │   ├── run.bat                         # Windows one-click local launcher
 │   ├── start.ps1                       # Windows PowerShell service runner
 │   └── start.sh                        # Linux / macOS startup script
+│
+├── presentation-demo/                  # Demo Video, Pitch Deck & Clinical Research
+│   ├── NeuroBeat_AI_Rehabilitation.pptx # 10-slide visual demo presentation
+│   ├── Research for neurabeat.docx     # Clinical Rhythmic Auditory Stimulation research
+│   └── Screen Recording 2026-09-27...mp4 # Live platform recording & session walkthrough
 │
 ├── api/                                # Modular Flask REST API Blueprints
 │   ├── auth/                           # User registration, login & JWT authentication
