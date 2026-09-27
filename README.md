@@ -219,6 +219,11 @@ NeuroBeat is structured around **three specialized, cooperatively orchestrated A
 | ![Gait Trainer](docs/images/gait_trainer.jpg) | ![Speech Rhythm](docs/images/speech_rhythm.jpg) |
 | *Dual-layer ML leg tracking, step cadence & real-time sync* | *Syllable timing target pacing, microphone energy & auditory feedback* |
 
+### 📊 Longitudinal Patient Progress (~30 Min Cumulative Usage)
+
+![Patient Progress Report](docs/images/progress_report.jpg)
+*Progress dashboard after ~20–30 minutes of cumulative rehabilitation across 58 micro-sessions. Visualizes real-time auditory-motor synchronization accuracy, cadence adaptation from baseline (123 BPM) toward target (135 BPM), and performance breakdowns across Speech Rhythm, Finger Tapping, and Gait Training modalities.*
+
 ---
 
 ## ⚡ Local Installation & Quick Start
